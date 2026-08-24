@@ -1,0 +1,23 @@
+# 方法配置：ResNet-18 + 线性回归头（轻量基线）
+name: resnet18
+
+model:
+  backbone: resnet18
+  pretrained: true
+  num_out: 2                        # pitch, yaw
+
+train:
+  batch_size: 50
+  epochs: 25
+  loss: l1
+  optimizer: adam
+  init_lr: 3.0e-4
+  lr_scheduler: step                # step / cosine
+  lr_patience: 10                   # StepLR step_size
+  lr_decay_factor: 0.1
+  ckpt_save_interval: 5             # 每 N 个 epoch 保存一次 ckpt（最后一个 epoch 始终保存）
+
+output:
+  print_freq: 1000
+  use_gpu: true
+  seed: 0

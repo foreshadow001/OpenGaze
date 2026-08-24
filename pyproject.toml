@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opengaze"
+version = "0.1.0"
+description = "Unified training and evaluation platform for gaze estimation (ETH-XGaze / MPIIFaceGaze / GazeCapture / EVE)"
+readme = "README.md"
+requires-python = ">=3.12"
+
+# torch/torchvision 使用 CUDA 12.6 轮子，需先从 PyTorch 官方索引安装（见 STRUCTURE.md 第 4 节）：
+#   pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cu126
+# 之后再执行 pip install -e .
+dependencies = [
+    "torch==2.13.0",
+    "torchvision==0.28.0",
+    "numpy",
+    "h5py",
+    "pyyaml",
+    "tensorboard",
+    "tqdm",
+    "opencv-python",
+    "scipy",
+    "matplotlib",
+    # 预处理（见 preprocessor/）；onnxruntime-gpu 1.22.x 对应 CUDA 12，1.23+ 需 CUDA 13
+    "insightface==0.7.3",
+    "onnxruntime-gpu==1.22.0",
+]
+
+[tool.setuptools]
+# preprocess/ 只注册为包的公共部分（common.py）；管线目录 zhang2015-insightface
+# 名含连字符非合法包名，由 preprocess.py 按文件路径加载，不在此列出
+packages = ["datasets", "models", "trainers", "utils", "preprocess"]

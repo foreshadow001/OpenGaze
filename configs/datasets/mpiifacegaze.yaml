@@ -1,0 +1,35 @@
+# MPIIFaceGaze 数据集配置（已预处理为统一 h5：/media/hitsz/ylx/mpiifacegaze_insightface_224）
+# 两种协议由 split.mode 切换：
+#   leave_one_out  折 i 以 p{i:02d} 为测试被试，其余 14 人训练（within-dataset 协议，
+#                  --set dataset.split.fold=i 切换折，scripts 内自动循环 15 折）
+#   all_subjects   15 人全量（train = test = 全部）；LOO 之后自动追加一次全量训练，
+#                  也是 cross-dataset 的源训练 / 目标测试协议
+#                  （--set dataset.split.mode=all_subjects）
+name: mpiifacegaze
+data_dir: /media/hitsz/ylx/mpiifacegaze_insightface_224
+
+split:
+  mode: leave_one_out
+  fold: 0                           # 0~14，配合 mode: leave_one_out 使用
+  sub_folder: ''                    # h5 直接在 data_dir 下（无子目录）
+  subjects:                         # 15 个被试
+      - p00.h5
+      - p01.h5
+      - p02.h5
+      - p03.h5
+      - p04.h5
+      - p05.h5
+      - p06.h5
+      - p07.h5
+      - p08.h5
+      - p09.h5
+      - p10.h5
+      - p11.h5
+      - p12.h5
+      - p13.h5
+      - p14.h5
+
+dataloader:
+  num_workers: 5
+  train_sample_size: 0              # 0 = 全量训练
+  test_sample_size: 0

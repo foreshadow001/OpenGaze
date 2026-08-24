@@ -1,0 +1,24 @@
+# 方法配置：ResNet-50 + 线性回归头（ETH-XGaze 官方基线）
+# 超参与官方一致：Adam, lr=1e-4, StepLR(10, 0.1), L1 损失
+name: resnet50
+
+model:
+  backbone: resnet50
+  pretrained: true
+  num_out: 2                        # pitch, yaw
+
+train:
+  batch_size: 50
+  epochs: 25
+  loss: l1
+  optimizer: adam
+  init_lr: 1.0e-4
+  lr_scheduler: step                # step / cosine
+  lr_patience: 10                   # StepLR step_size
+  lr_decay_factor: 0.1
+  ckpt_save_interval: 5             # 每 N 个 epoch 保存一次 ckpt（最后一个 epoch 始终保存）
+
+output:
+  print_freq: 1000
+  use_gpu: true
+  seed: 0

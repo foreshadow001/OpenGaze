@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# 实验输出（含配置快照、ckpt、tensorboard 日志，体积大且不入库）
+exp/
+
+# 预处理运行日志（run.log + failures.json）
+preprocess/log/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+
+# 临时文件
+*.log
+*.swp
