@@ -1,0 +1,102 @@
+# GazeCapture 15 种设备前置（FaceTime）摄像头参数统计
+#
+# 数据来源：
+#   - explorecams.com 型号页照片 EXIF 聚合（https://explorecams.com/photos/model/<slug>，
+#     2026-08-24 抓取），给出前置摄像头的实际物理焦距（mm）与光圈
+#   - iPad 3 / iPad 4：explorecams 页面无规格数据，按 Apple 官方规格补充——
+#     前置与 iPad 2 同为 VGA FaceTime 摄像头，沿用 iPad 2 参数
+#   - iPad Pro (12.9" 1st gen)：explorecams 页面无规格数据，前置 1.2MP f/2.4
+#     与 iPad Air 2 同级，沿用其参数（该型号仅占数据集 0.1%，影响可忽略）
+#
+# 关键结论：15 种型号收敛为 4 个硬件代际组（内参按组取值）：
+#   group_vga    1.85mm f/2.4   （VGA 0.3MP：iPhone 4S, iPad 2/3/4）
+#   group_12mp_a 2.15~2.18mm f/2.4（1.2MP：iPhone 5/5C/5S, iPad Air, iPad Mini）
+#   group_12mp_b 2.65mm f/2.2   （iPhone 6/6+, iPad Air 2, iPad Pro）
+#   group_5mp    2.65mm f/2.2   （iPhone 6s/6s+：5MP 前置，传感器与 1.2MP 代不同，自成一组）
+#
+# 注意：物理焦距不能直接比较 FOV（各组传感器尺寸不同：iPhone 6 前置焦距更长但
+# 传感器更大）。换算 480x640 分辨率下的像素焦距（PnP 用）需要各组传感器尺寸
+# 或照片 EXIF 的等效 35mm 焦距——见 TODO-1 下一步。
+
+devices:
+  'iPhone 4S':      {front_focal_mm: 1.85, front_aperture: 'f/2.4', source: explorecams, sessions: 61,  group: group_vga}
+  'iPhone 5':       {front_focal_mm: 2.18, front_aperture: 'f/2.4', source: explorecams, sessions: 136, group: group_12mp_a}
+  'iPhone 5C':      {front_focal_mm: 2.15, front_aperture: 'f/2.4', source: explorecams, sessions: 132, group: group_12mp_a}
+  'iPhone 5S':      {front_focal_mm: 2.15, front_aperture: 'f/2.4', source: explorecams, sessions: 293, group: group_12mp_a}
+  'iPhone 6':       {front_focal_mm: 2.65, front_aperture: 'f/2.2', source: explorecams, sessions: 336, group: group_12mp_b}
+  'iPhone 6 Plus':  {front_focal_mm: 2.65, front_aperture: 'f/2.2', source: explorecams, sessions: 152, group: group_12mp_b}
+  'iPhone 6s':      {front_focal_mm: 2.65, front_aperture: 'f/2.2', source: explorecams, sessions: 106, group: group_5mp}
+  'iPhone 6s Plus': {front_focal_mm: 2.65, front_aperture: 'f/2.2', source: explorecams, sessions: 34,  group: group_5mp}
+  'iPad 2':         {front_focal_mm: 1.85, front_aperture: 'f/2.4', source: explorecams, sessions: 23,  group: group_vga}
+  'iPad 3':         {front_focal_mm: 1.85, front_aperture: 'f/2.4', source: apple_spec,  sessions: 10,  group: group_vga}
+  'iPad 4':         {front_focal_mm: 1.85, front_aperture: 'f/2.4', source: apple_spec,  sessions: 39,  group: group_vga}
+  'iPad Mini':      {front_focal_mm: 2.18, front_aperture: 'f/2.4', source: explorecams, sessions: 60,  group: group_12mp_a}
+  'iPad Air':       {front_focal_mm: 2.15, front_aperture: 'f/2.4', source: explorecams, sessions: 50,  group: group_12mp_a}
+  'iPad Air 2':     {front_focal_mm: 2.65, front_aperture: 'f/2.2', source: explorecams, sessions: 40,  group: group_12mp_b}
+  'iPad Pro':       {front_focal_mm: 2.65, front_aperture: 'f/2.2', source: apple_spec,  sessions: 2,   group: group_12mp_b}
+
+# 相机内参（视频帧下的初值，PnP 用），获取步骤与来源核验见 obtain_camera_intrinsics.md
+#
+# ⚠️ 帧分辨率是逐帧属性（2026-08-24 全量核验，1409/1474 session 内混合）：
+#   Orientation 1/2（竖握）→ app 旋转输出 480x640（宽x高，竖屏帧）
+#   Orientation 3/4（横握）→ 传感器原生 640x480（横屏帧）
+# 同一传感器方形像素 → 两种帧 fx 相同，仅主点互换：
+#   竖屏帧 480x640: cx=240, cy=320      横屏帧 640x480: cx=320, cy=240
+# 预处理实现须逐帧按实际尺寸构造 K。
+#
+# 依据：GazeCapture 未发布前摄内参；dot 均在相机平面 z=0 上，XCam↔XPts 仿射拟合
+# （R²≈1.0，斜率×逻辑分辨率与各设备真实屏幕物理尺寸吻合，2026-08-24 实证）
+# 只能验证尺度与朝向，无法反推焦距。fx 全部为一手锚点（已逐源核验，2026-08-24）：
+#   - SystemPlus 逆向报告（2015，PRNewswire 通稿）像元尺寸：iPhone 6 前置
+#     Sony Exmor-RS 像元 2.2µm、上代（5S）1.75µm；结合 EXIF 一手物理焦距
+#     （2.65 / 2.15~2.18mm）与 2x2 binning（1280x960 原生 → 640x480 视频）：
+#       iPhone 6  → fx = 2.65/4.4µm = 602
+#       iPhone 5S → fx = 2.15/3.5µm = 614；iPhone 5 → 623
+#   - Boinx 实验室 2013 激光实测前置 FOV（一手，Wayback 存档）：
+#     iPhone 5 54.2° → fx 625（与 SystemPlus 路线 iPhone 5 的 623 差 0.3%，互证 ✓）
+#     iPhone 4S 55.0° / iPad 2~4+mini 54.4~54.8° → fx 615~622
+#   - Reddit "iPhone 6 前置 31mm 等效"（二手）→ 573，被 SystemPlus 一手否定（差 5%），弃用
+# ⚠️ 6s/6s+ 前置为 5MP（与 6 的 1.2MP 不同传感器，SystemPlus 报告未覆盖，
+# 占 140 session）：公开无像元数据；PnP 自标定判别力不足（§6 负结果）；
+# bbox 宽度分布实证（25 session/设备）排除了全幅缩放路径（fx≈437 时 bbox
+# 应小 38%，实测仅小 12%），且揭示拍摄距离混杂（6 Plus 同模组 bbox 也小
+# 11.7%，与屏幕尺寸单调——大屏持机更远）。故 6s/6s+ 自成 group_5mp，
+# fx = 560（实证区间 [536, 602] 中值）。
+# fx 以外部一手锚点定稿（602 / 618 / 618）；PnP 重投影仅作管线内 sanity
+# check（RMS ~1.5px 量级即健康）。
+intrinsics:
+  cx_cy_portrait_480x640: [240, 320]   # 竖屏帧主点（Ori 1/2）
+  cx_cy_landscape_640x480: [320, 240]  # 横屏帧主点（Ori 3/4）
+  fx_by_group:
+    group_vga:    618    # Boinx 一手实测（iPhone 4S 615 / iPad 2-4 618~622）
+    group_12mp_a: 618    # 双一手路线互证：SystemPlus 614~623 ≈ Boinx 622~625
+    group_12mp_b: 602    # SystemPlus 一手（Sony 2.2µm + EXIF 2.65mm）；对角 FOV 67.2°
+    group_5mp:    560    # 6s/6s+ 自成一组：bbox 实证区间 [536, 602] 中值
+  fx_unified: 613        # 三组一手锚点中值
+
+groups:
+  group_vga:
+    focal_mm: 1.85
+    aperture: 'f/2.4'
+    sensor: 'VGA 0.3MP FaceTime 摄像头（Apple 未公布传感器尺寸，约 1/9"~1/10" 级）'
+    devices: ['iPhone 4S', 'iPad 2', 'iPad 3', 'iPad 4']
+    sessions: 133       # 占比 9.0%
+  group_12mp_a:
+    focal_mm: [2.15, 2.18]
+    aperture: 'f/2.4'
+    sensor: '1.2MP FaceTime HD（OmniVision/Sony，约 1/5" 级）'
+    devices: ['iPhone 5', 'iPhone 5C', 'iPhone 5S', 'iPad Mini', 'iPad Air']
+    sessions: 671       # 占比 45.5%
+  group_12mp_b:
+    focal_mm: 2.65
+    aperture: 'f/2.2'
+    sensor: '1.2MP FaceTime HD，传感器更大（等效焦距与 group_12mp_a 接近或更广）'
+    devices: ['iPhone 6', 'iPhone 6 Plus', 'iPad Air 2', 'iPad Pro']
+    sessions: 530       # 占比 36.0%
+  group_5mp:
+    focal_mm: 2.65
+    aperture: 'f/2.2'
+    sensor: '5MP FaceTime HD（2592x1936，传感器与 1.2MP 代不同；像元无公开一手，
+      fx 由 bbox 实证区间 [536, 602] 取中值 560，见 obtain_camera_intrinsics.md）'
+    devices: ['iPhone 6s', 'iPhone 6s Plus']
+    sessions: 140       # 占比 9.5%

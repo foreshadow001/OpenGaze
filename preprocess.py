@@ -38,6 +38,29 @@ def _load_module(name, path):
     return module
 
 
+def _load_preprocessor(method, dataset):
+    """定位并加载预处理器，两种形式（管线目录 preprocess/<method>/ 下）：
+        1. 文件  normalize_<dataset>.py（模块级 run）
+        2. 目录  <dataset>/__init__.py（复杂预处理拆多文件时用，包级 run）
+    """
+    base = os.path.join(PREPROCESS_ROOT, method)
+    as_file = os.path.join(base, f'normalize_{dataset}.py')
+    as_pkg = os.path.join(base, dataset, '__init__.py')
+    if os.path.isfile(as_file):
+        return _load_module(f'normalize_{dataset}', as_file)
+    if os.path.isfile(as_pkg):
+        # 按包加载：__init__.py + submodule_search_locations 使包内相对导入可用
+        spec = importlib.util.spec_from_file_location(
+            f'preprocess_{dataset}', as_pkg,
+            submodule_search_locations=[os.path.dirname(as_pkg)])
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module
+    raise SystemExit(
+        f'管线 {method} 下无 {dataset} 预处理器（未找到 {as_file} 与 {as_pkg}）')
+
+
 def main():
     parser = argparse.ArgumentParser(description='OpenGaze 数据预处理')
     parser.add_argument('--dataset', required=True,
@@ -56,18 +79,13 @@ def main():
     config = yaml_to_ns(load_yaml(config_path))
     apply_overrides(config, args.set)
 
-    # 管线目录下按数据集命名约定定位脚本
-    script = os.path.join(PREPROCESS_ROOT, args.method,
-                          f'normalize_{args.dataset}.py')
-    if not os.path.exists(script):
-        raise SystemExit(f'管线 {args.method} 下无 {args.dataset} 预处理器: {script}')
-
+    # 管线目录下按数据集定位预处理器（文件或目录两种形式）
     run_dir = new_run_dir(args.dataset)
     log.info(f'数据集: {args.dataset} | 管线: {args.method} | 配置: {config_path}')
     for key, value in vars(config).items():
         log.info(f'  {key}: {value}')
 
-    module = _load_module(f'normalize_{args.dataset}', script)
+    module = _load_preprocessor(args.method, args.dataset)
     recorder = FailureRecorder()
     module.run(config, recorder)
 

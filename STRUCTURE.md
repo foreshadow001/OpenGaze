@@ -18,7 +18,10 @@ Gaze/
 │   │   └── resnet50.yaml
 │   └── preprocess/                   # 预处理配置（输入输出路径、被试列表、线程数）
 │       ├── xgaze.yaml                #   xgaze 特有：annotation_dir / calib_dir / sub_folder
-│       └── mpiifacegaze.yaml
+│       ├── mpiifacegaze.yaml
+│       └── gazecapture.yaml          #   引用 splits/ 下的官方 session 级划分
+│   └── splits/                       # 数据集官方划分（独立共享：预处理与训练配置都引用）
+│       └── gazecapture_sessions.yaml #   GazeCapture：train 1271 / val 50 / test 150 session + excluded 3
 │
 ├── datasets/                         # 数据集加载（统一 h5 格式）
 │   ├── __init__.py                   #   build_train_loader / build_test_loader 工厂
@@ -44,6 +47,7 @@ Gaze/
 │   ├── zhang2015-insightface/        #   管线：Zhang2015 归一化 + insightface 106 点 PnP
 │   │   ├── normalize_xgaze.py        #     XGazePreprocessor 类（FLIP/EXCLUDE 相机表、face model 独立配置加载）
 │   │   ├── normalize_mpiifacegaze.py #     MPIIFaceGaze（同管线，独立常量）
+│   │   ├── gazecapture/              #     GazeCapture 预处理（目录包形式，骨架待实现）
 │   │   └── face_model_xgaze.txt      #     3D face model 数据
 │   └── log/                          #   每次预处理一个目录（run.log + failures.json，gitignore）
 │
