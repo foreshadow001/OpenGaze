@@ -19,6 +19,5 @@ train:
   ckpt_save_interval: 5             # 每 N 个 epoch 保存一次 ckpt（最后一个 epoch 始终保存）
 
 output:
-  print_freq: 1000
   use_gpu: true
   seed: 0

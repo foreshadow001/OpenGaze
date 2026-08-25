@@ -1,9 +1,10 @@
 """ETH-XGaze 数据集
 
-官方 test 集不公开标注，因此从 train/ 目录（80 个被试）中自行划分：
+官方 test 集不公开标注，因此从 80 个被试（官方 train/ 目录）中自行划分：
     train: 75 个被试    test: 5 个被试（subject0106~0111）
 划分文件已并入 configs/datasets/xgaze.yaml 的 split 段。
-官方 h5 内部为 BGR 存储，加载时翻转（保持官方训练管线行为）。
+数据现为自预处理版（insightface 管线，/home/hitsz/dataset/xgaze_insightface_224，
+h5 在根目录）；其与官方 h5 同为 BGR 存储，加载时统一翻转。
 """
 from torch.utils.data import DataLoader
 

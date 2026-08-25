@@ -40,7 +40,6 @@ class Trainer:
         # 每 N 个 epoch 保存一次 checkpoint（节约空间；最后一个 epoch 始终保存，
         # 保证训练完成必有最终 ckpt，且 resume / --test 取最新的语义不变）
         self.ckpt_save_interval = getattr(train_cfg, 'ckpt_save_interval', 5)
-        self.print_freq = output_cfg.print_freq
         self.device = torch.device(
             'cuda' if output_cfg.use_gpu and torch.cuda.is_available() else 'cpu')
         self.start_epoch = 0
@@ -104,15 +103,13 @@ class Trainer:
 
     def train_one_epoch(self, epoch, data_loader):
         """带 tqdm 进度条的单 epoch 训练"""
-        batch_time = AverageMeter()
         errors = AverageMeter()
         losses_gaze = AverageMeter()
-
-        tic = time.time()
+        t_epoch = time.time()
         pbar = tqdm(enumerate(data_loader), total=len(data_loader),
                     desc=f'Epoch {epoch + 1}/{self.epochs}',
                     ncols=120, unit='batch')
-        for i, (input_img, target) in pbar:
+        for _, (input_img, target) in pbar:
             input_var = input_img.float().to(self.device)
             target_var = target.float().to(self.device)
 
@@ -134,31 +131,16 @@ class Trainer:
                 'lr': f'{self.optimizer.param_groups[0]["lr"]:.6f}',
             })
 
-            if i % self.print_freq == 0 and self.logger is not None:
-                self.logger.add_scalar('Loss/gaze', losses_gaze.avg, self.train_iter)
-
-            if i % self.print_freq == 0 and i != 0:
-                self.log.info(f'iteration {self.train_iter} | '
-                              f'train error: {errors.avg:.3f} | '
-                              f'loss_gaze: {losses_gaze.avg:.5f}')
-                toc = time.time()
-                batch_time.update(toc - tic)
-                tic = time.time()
-                est_time = (self.epochs - epoch) * (len(data_loader.dataset)
-                                                    / self.batch_size) \
-                    * batch_time.avg / 60.0
-                self.log.info(f'estimated training time left: '
-                              f'{np.round(est_time)} mins')
-                if self.logger is not None:
-                    self.logger.add_scalar('Error/train', errors.avg, self.train_iter)
-                errors.reset()
-                losses_gaze.reset()
-
             self.train_iter += 1
 
-        toc = time.time()
-        batch_time.update(toc - tic)
-        self.log.info(f'epoch {epoch + 1} avg batch time: {batch_time.avg:.4f}s')
+        # epoch 结束记录一次（每 epoch 恰一个点，不依赖 print_freq 与迭代数的关系）
+        self.log.info(f'epoch {epoch + 1}/{self.epochs} done in '
+                      f'{(time.time() - t_epoch) / 60:.1f} min | '
+                      f'train error: {errors.avg:.3f} | '
+                      f'loss_gaze: {losses_gaze.avg:.5f}')
+        if self.logger is not None:
+            self.logger.add_scalar('Loss/gaze', losses_gaze.avg, epoch + 1)
+            self.logger.add_scalar('Error/train', errors.avg, epoch + 1)
         return errors.avg, losses_gaze.avg
 
     # ------------------------------------------------------------------- test

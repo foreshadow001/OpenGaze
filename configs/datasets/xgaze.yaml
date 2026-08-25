@@ -1,13 +1,13 @@
-# ETH-XGaze 数据集配置
-# 官方 test 集不公开标注，因此从 train/ 目录（80 个被试）中自行划分：
+# ETH-XGaze 数据集配置（自预处理版：insightface 管线，h5 在 data_dir 根目录，BGR 存储）
+# 官方 test 集不公开标注，因此从 80 个被试（官方 train/ 目录）中自行划分：
 #   train: 75 个被试    test: 5 个被试（subject0106~0111）
 # 划分来源：ETH-XGaze 官方 train_test_split.json（已并入本文件）
 name: xgaze
-data_dir: /media/hitsz/ylx/xgaze_224
+data_dir: /home/hitsz/dataset/xgaze_insightface_224
 
 split:
   train:
-    sub_folder: train
+    sub_folder: ''
     subjects:
       - subject0000.h5
       - subject0003.h5
@@ -85,7 +85,7 @@ split:
       - subject0104.h5
       - subject0105.h5
   test:
-    sub_folder: train
+    sub_folder: ''
     subjects:
       - subject0106.h5
       - subject0107.h5
