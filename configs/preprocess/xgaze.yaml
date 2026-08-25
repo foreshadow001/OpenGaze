@@ -4,10 +4,11 @@ raw_data_dir: /media/hitsz/Expansion/xgaze_raw/data       # 原始数据（subje
 sub_folder: train                                          # 处理哪个子集（train）
 annotation_dir: /media/hitsz/Expansion/xgaze_raw/data/annotation_train   # 标注 CSV
 calib_dir: /media/hitsz/Expansion/xgaze_raw/calibration/cam_calibration # 相机标定 xml
-output_dir: /media/hitsz/ylx/xgaze_insightface_224_v2        # 输出目录（每人一个 subjectNNNN.h5）
+output_dir: /media/hitsz/ylx/xgaze_insightface_224        # 输出目录（每人一个 subjectNNNN.h5）
                                                          # ⚠️ 运行会覆盖同名 h5！该目录已是处理好的正式数据，
                                                          #    重跑务必 --set output_dir=<临时目录>
 subjects: []          # 空列表 = 全部受试者；指定则如 [0, 3]
 max_frames: 0         # 调试用：只处理每人前 N 帧（0 = 全部）
 num_read_workers: 8   # 读图线程数
 providers: [CUDAExecutionProvider, CPUExecutionProvider]  # insightface 推理后端
+landmarks_dir: ""    # 非空 = 从该目录的 landmarks h5 索引遍历并读取已提取特征点（跳过 insightface 检测）

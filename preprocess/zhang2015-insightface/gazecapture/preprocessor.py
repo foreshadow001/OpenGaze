@@ -89,6 +89,8 @@ class GazeCapturePreprocessor:
     def __init__(self, config):
         global FACE_MODEL_USE
         self.config = config
+        # landmarks 模式：从已抽取特征点 h5 索引遍历（跳过 insightface 检测）
+        self.landmarks_dir = getattr(config, 'landmarks_dir', '') or None
         if FACE_MODEL_USE is None:
             fm = np.loadtxt(Path(__file__).parent.parent / 'face_model_xgaze.txt')
             FACE_MODEL_USE = fm.reshape(50, 1, 3)[LANDMARK_USE, :]
@@ -128,15 +130,28 @@ class GazeCapturePreprocessor:
         try:
             frames_list = json.load(open(rec_dir / 'frames.json'))
             dot = json.load(open(rec_dir / 'dotInfo.json'))
-            screen = json.load(open(rec_dir / 'screen.json'))
             device = json.load(open(rec_dir / 'info.json'))['DeviceName']
         except Exception as e:
             recorder.add(session, '<session>', f'error:{type(e).__name__}:{e}')
             return 0
+        # frame_index -> dotInfo/screen 数组位置（frames.json 顺序与 json 数组对齐）
+        pos_of = {int(name.split('.')[0]): i for i, name in enumerate(frames_list)}
 
-        n = min(len(frames_list), len(dot['XCam']), len(screen['Orientation']))
-        if getattr(self.config, 'max_frames', 0):
-            n = min(n, self.config.max_frames)      # 调试：只处理前 N 帧
+        lm_cache, ori_arr = None, None
+        if self.landmarks_dir:
+            with h5py.File(Path(self.landmarks_dir) / split /
+                           f'{session}.h5', 'r') as f:
+                fi = f['frame_index'][:].ravel()
+                ori_arr = f['orientation'][:].ravel()
+                lm_cache = f['facial_landmarks_2d'][:]
+            work = [(r, int(fi[r])) for r in range(len(fi))]   # (行号, frame_index)
+        else:
+            screen = json.load(open(rec_dir / 'screen.json'))
+            n = min(len(frames_list), len(dot['XCam']), len(screen['Orientation']))
+            if getattr(self.config, 'max_frames', 0):
+                n = min(n, self.config.max_frames)      # 调试：只处理前 N 帧
+            work = list(range(n))                       # 数组位置
+        n = len(work)                                   # 两种模式的统一规模
 
         out_path = Path(self.config.output_dir) / split / f'{session}.h5'
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -164,22 +179,23 @@ class GazeCapturePreprocessor:
 
         # 读图-处理流水线（与 xgaze 版同构）：8 线程预读，主线程检测/PnP/归一化
         q = queue.Queue(maxsize=2)
-        idxs = list(range(n))
 
         def read_frames():
             try:
                 with ThreadPoolExecutor(
                         max_workers=self.config.num_read_workers) as ex:
-                    for i in idxs:
-                        img = cv2.imread(str(rec_dir / 'frames' / frames_list[i]))
-                        q.put((i, img))
+                    for it in work:
+                        name = (frames_list[it] if isinstance(it, int)
+                                else f'{it[1]:05d}.jpg')
+                        img = cv2.imread(str(rec_dir / 'frames' / name))
+                        q.put((it, img))
                 q.put(None)
             except Exception as e:
                 q.put(e)
 
         threading.Thread(target=read_frames, daemon=True).start()
 
-        pbar = tqdm(total=n, desc=f'{session}({split})', unit='帧',
+        pbar = tqdm(total=len(work), desc=f'{session}({split})', unit='帧',
                     ncols=100, leave=False)
         try:
             while True:
@@ -188,20 +204,34 @@ class GazeCapturePreprocessor:
                     break
                 if isinstance(item, Exception):
                     raise item
-                i, img = item
-                frame_name = frames_list[i]
-                if img is None:
-                    recorder.add(session, frame_name, 'imread_failed')
-                    pbar.update(1)
-                    continue
-                faces = app.get(img)
-                if len(faces) == 0:
-                    recorder.add(session, frame_name, 'no_face_detected')
-                    pbar.update(1)
-                    continue
-                ori = screen['Orientation'][i]
-                xcam, ycam = dot['XCam'][i], dot['YCam'][i]
-                if dot['DotNum'][i] == -1 or xcam is None or ycam is None:
+                it, img = item
+                if isinstance(it, int):              # 原始模式：数组位置
+                    frame_index, frame_name = None, frames_list[it]
+                    lm106 = None
+                    if img is None:
+                        recorder.add(session, frame_name, 'imread_failed')
+                        pbar.update(1)
+                        continue
+                    faces = app.get(img)
+                    if len(faces) == 0:
+                        recorder.add(session, frame_name, 'no_face_detected')
+                        pbar.update(1)
+                        continue
+                    lm106 = faces[0].landmark_2d_106
+                    ori = screen['Orientation'][it]
+                    pos = it
+                else:                                # landmarks 模式：(行号, frame_index)
+                    row, frame_index = it
+                    frame_name = f'{frame_index:05d}.jpg'
+                    if img is None:
+                        recorder.add(session, frame_name, 'imread_failed')
+                        pbar.update(1)
+                        continue
+                    lm106 = lm_cache[row]
+                    ori = int(ori_arr[row])
+                    pos = pos_of[frame_index]
+                xcam, ycam = dot['XCam'][pos], dot['YCam'][pos]
+                if dot['DotNum'][pos] == -1 or xcam is None or ycam is None:
                     recorder.add(session, frame_name, 'no_annotation')
                     pbar.update(1)
                     continue
@@ -213,7 +243,6 @@ class GazeCapturePreprocessor:
 
                 h, w = img.shape[:2]
                 K, dist = self._load_calib(device, w, h)
-                lm106 = faces[0].landmark_2d_106
                 pts2d = lm106[IDX6].reshape(6, 1, 2).astype(float)
                 rvec, tvec = estimateHeadPose(pts2d, self.face_model_use, K, dist)
                 gaze_point = _gaze_point_cam(ori, ccs_x, ccs_y)
@@ -239,22 +268,30 @@ class GazeCapturePreprocessor:
             h5.close()
 
         log.info(f'{session}({split}, {device}/{self.device_group.get(device, "?")}): '
-                 f'{written}/{n} 样本 -> {out_path.name} '
+                 f'{written}/{len(work)} 候选入库 -> {out_path.name} '
                  f'({(time.time() - t_sub) / 60:.1f} min)')
         return written
 
     # ------------------------------------------------------------------ 入口
     def run(self, recorder: FailureRecorder):
-        from insightface.app import FaceAnalysis
-        app = FaceAnalysis('buffalo_l',
-                           allowed_modules=['detection', 'landmark_2d_106'],
-                           providers=self.config.providers)
-        app.prepare(ctx_id=0)
+        app = None
+        if self.landmarks_dir:
+            log.info(f"landmarks 模式: 索引遍历 {self.landmarks_dir}（跳过 insightface 检测）")
+        else:
+            from insightface.app import FaceAnalysis
+            app = FaceAnalysis('buffalo_l',
+                               allowed_modules=['detection', 'landmark_2d_106'],
+                               providers=self.config.providers)
+            app.prepare(ctx_id=0)
 
         total_n = 0
         t_all = time.time()
         for split in self.splits:
             sessions = self.split_sessions[split]
+            if self.landmarks_dir:   # 只保留有 landmarks 清单的 session
+                sessions = [s for s in sessions
+                            if (Path(self.landmarks_dir) / split /
+                                f'{s}.h5').is_file()]
             if self.session_filter:
                 sessions = [s for s in sessions if s in self.session_filter]
             log.info(f'===== split {split}: {len(sessions)} 个 session，'

@@ -3,7 +3,7 @@
 #   train: 75 个被试    test: 5 个被试（subject0106~0111）
 # 划分来源：ETH-XGaze 官方 train_test_split.json（已并入本文件）
 name: xgaze
-data_dir: /home/hitsz/dataset/xgaze_insightface_224
+data_dir: /media/hitsz/ylx/xgaze_insightface_224
 
 split:
   train:

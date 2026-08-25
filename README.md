@@ -88,7 +88,7 @@ python preprocess.py --dataset mpiifacegaze --method zhang2015-insightface \
 python preprocess.py --dataset xgaze --method zhang2015-insightface --set 'subjects=[0, 3]'
 ```
 
-每次运行在 `preprocess/log/<dataset>_<时间戳>/` 留档 `run.log`（分级日志）与 `failures.json`（**失败/跳过帧逐条记录**：读图失败 / 检测不到脸 / 无标注 / 异常，含按原因汇总），供核对数据完整性。预处理脚本按管线组织在 `preprocess/zhang2015-insightface/`（Zhang2015 归一化 + insightface 关键点；xgaze 为 `XGazePreprocessor` 类，相机翻转/排除表与 face model 独立配置加载）。注意：预处理会覆盖输出目录同名 h5，调试务必用 `--set output_dir=...` 指向临时目录。
+每次运行在 `preprocess/<method>/log/<dataset>_<时间戳>/` 留档 `run.log`（分级日志）与 `failures.json`（**失败/跳过帧逐条记录**：读图失败 / 检测不到脸 / 无标注 / 异常，含按原因汇总），供核对数据完整性。预处理脚本按管线组织在 `preprocess/zhang2015-insightface/`（Zhang2015 归一化 + insightface 关键点；xgaze 为 `XGazePreprocessor` 类，相机翻转/排除表与 face model 独立配置加载）。注意：预处理会覆盖输出目录同名 h5，调试务必用 `--set output_dir=...` 指向临时目录。
 
 实验目录结构（每次训练自包含，可复现）：
 

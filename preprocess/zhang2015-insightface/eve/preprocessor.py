@@ -65,6 +65,11 @@ class EVEPreprocessor:
             fm = np.loadtxt(Path(__file__).parent.parent / 'face_model_xgaze.txt')
             FACE_MODEL_USE = fm.reshape(50, 1, 3)[LANDMARK_USE, :]
         self.face_model_use = FACE_MODEL_USE
+        # landmarks 模式：从已抽取特征点 h5 索引遍历（跳过 insightface 检测）
+        self.landmarks_dir = getattr(config, 'landmarks_dir', '') or None
+        if not hasattr(config.splits, 'train'):
+            raise ValueError("eve 的 splits 是 split→被试列表的映射，不能整体覆盖为列表；"
+                             "只处理某个 split 请用 subjects 过滤（被试名单本身按 split 归属）")
         self.cameras = list(config.cameras)
         self.subject_filter = set(config.subjects) if config.subjects else None
         self.split_subjects = {s: list(v) for s, v in vars(config.splits).items()}
@@ -72,11 +77,13 @@ class EVEPreprocessor:
         self.intervals = {c: round(FPS[c] / config.target_hz) for c in self.cameras}
 
     # ------------------------------------------------------------ 单 step×cam
-    def _plan(self, step_dir, cam, recorder, rec_subject):
+    def _plan(self, step_dir, cam, recorder, rec_subject, cand_override=None):
         """读取一步一相机的标定与标签，确定候选帧。
 
         返回 dict(K/T/mmp/pog/cand) 或 None（该 step×cam 不可用，已记失败）。
-        cand = 采样且 PoG 有效的帧号；采样但无效的候选帧记 no_annotation。
+        cand_override（landmarks 模式）：直接给定候选帧号（仍做 PoG 有效性校验，
+        无效者记 no_annotation）；否则按 interval 采样。返回 dict 的 cand 为
+        采样且 PoG 有效的帧号。
         """
         h5_path = step_dir / f'{cam}.h5'
         mp4_path = step_dir / f'{cam}.mp4'
@@ -97,13 +104,19 @@ class EVEPreprocessor:
             recorder.add(rec_subject, '<step>', 'mp4_missing')
             return None
 
-        n_frames = len(valid)
-        if getattr(self.config, 'max_frames', 0):
-            n_frames = min(n_frames, self.config.max_frames)   # 调试：流内前 N 帧
-        sampled = np.arange(0, n_frames, self.intervals[cam])
-        cand = sampled[valid[sampled]]
-        for i in sampled[~valid[sampled]]:
-            recorder.add(rec_subject, f'frame{i:05d}', 'no_annotation')
+        if cand_override is not None:                 # landmarks 模式
+            sampled = np.array(sorted(cand_override))
+            cand = sampled[valid[sampled]]
+            for i in sampled[~valid[sampled]]:
+                recorder.add(rec_subject, f'frame{i:05d}', 'no_annotation')
+        else:
+            n_frames = len(valid)
+            if getattr(self.config, 'max_frames', 0):
+                n_frames = min(n_frames, self.config.max_frames)   # 调试：流内前 N 帧
+            sampled = np.arange(0, n_frames, self.intervals[cam])
+            cand = sampled[valid[sampled]]
+            for i in sampled[~valid[sampled]]:
+                recorder.add(rec_subject, f'frame{i:05d}', 'no_annotation')
         return {'K': K, 'T': T, 'mmp': mmp, 'pog': pog, 'cand': cand.tolist(),
                 'n_sampled': len(sampled)}
 
@@ -131,17 +144,39 @@ class EVEPreprocessor:
     # ------------------------------------------------------------- 单被试
     def process_subject(self, subject, split, app, recorder: FailureRecorder):
         subject_dir = Path(self.config.raw_data_dir) / subject
-        steps = sorted(d.name for d in subject_dir.iterdir()
-                       if d.is_dir() and d.name.startswith('step'))
+        lm_lookup = None
+        if self.landmarks_dir:
+            # landmarks 模式：steps/cameras 顺序以清单 attrs 为准，帧集 = 清单行
+            with h5py.File(Path(self.landmarks_dir) / split /
+                           f'{subject}.h5', 'r') as f:
+                steps = json.loads(f.attrs['steps'])
+                self.cameras = json.loads(f.attrs['cameras'])
+                fi = f['frame_index'][:].ravel()
+                ci = f['cam_index'][:].ravel()
+                si = f['step_index'][:].ravel()
+                lm_all = f['facial_landmarks_2d'][:]
+            cand_of = {}
+            lm_lookup = {}
+            for r in range(len(fi)):
+                cand_of.setdefault((int(si[r]), int(ci[r])), []).append(int(fi[r]))
+                lm_lookup[(int(si[r]), int(ci[r]), int(fi[r]))] = lm_all[r]
+            log.info(f'{subject}: landmarks 模式, {len(steps)} 步, {len(fi)} 行')
+        else:
+            steps = sorted(d.name for d in subject_dir.iterdir()
+                           if d.is_dir() and d.name.startswith('step'))
         if getattr(self.config, 'max_steps', 0):
             steps = steps[:self.config.max_steps]              # 调试：前 N 步
 
         # 预读全部 step×cam 的计划（同时把无效候选记入 recorder）
         plans = []
         for si, step in enumerate(steps):
-            for cam in self.cameras:
+            for cam_idx, cam in enumerate(self.cameras):
+                override = (cand_of.get((si, cam_idx))
+                            if lm_lookup is not None else None)
+                if override is None and lm_lookup is not None:
+                    continue            # 该 step×cam 无清单行
                 plan = self._plan(subject_dir / step, cam, recorder,
-                                  f'{subject}/{step}/{cam}')
+                                  f'{subject}/{step}/{cam}', cand_override=override)
                 if plan is not None:
                     plans.append((si, cam, plan))
         n_cand_total = sum(p['n_sampled'] for *_, p in plans)
@@ -203,14 +238,16 @@ class EVEPreprocessor:
                                      'decode_failed')
                         pbar.update(1)
                         continue
-                    faces = app.get(img)
-                    if len(faces) == 0:
-                        recorder.add(f'{subject}/{steps[si]}/{cam}', rec_sample,
-                                     'no_face_detected')
-                        pbar.update(1)
-                        continue
-
-                    lm106 = faces[0].landmark_2d_106
+                    if lm_lookup is not None:
+                        lm106 = lm_lookup[(si, ci, i)]     # 已提取特征点，跳过检测
+                    else:
+                        faces = app.get(img)
+                        if len(faces) == 0:
+                            recorder.add(f'{subject}/{steps[si]}/{cam}', rec_sample,
+                                         'no_face_detected')
+                            pbar.update(1)
+                            continue
+                        lm106 = faces[0].landmark_2d_106
                     pts2d = lm106[IDX6].reshape(6, 1, 2).astype(float)
                     rvec, tvec = estimateHeadPose(
                         pts2d, self.face_model_use, plan['K'], DIST)
@@ -249,16 +286,24 @@ class EVEPreprocessor:
 
     # ------------------------------------------------------------------ 入口
     def run(self, recorder: FailureRecorder):
-        from insightface.app import FaceAnalysis
-        app = FaceAnalysis('buffalo_l',
-                           allowed_modules=['detection', 'landmark_2d_106'],
-                           providers=self.config.providers)
-        app.prepare(ctx_id=0)
+        app = None
+        if self.landmarks_dir:
+            log.info(f"landmarks 模式: 索引遍历 {self.landmarks_dir}（跳过 insightface 检测）")
+        else:
+            from insightface.app import FaceAnalysis
+            app = FaceAnalysis('buffalo_l',
+                               allowed_modules=['detection', 'landmark_2d_106'],
+                               providers=self.config.providers)
+            app.prepare(ctx_id=0)
 
         total_n = 0
         t_all = time.time()
         for split in self.splits:
             subjects = self.split_subjects[split]
+            if self.landmarks_dir:   # 只保留有 landmarks 清单的被试
+                subjects = [s for s in subjects
+                            if (Path(self.landmarks_dir) / split /
+                                f'{s}.h5').is_file()]
             if self.subject_filter:
                 subjects = [s for s in subjects if s in self.subject_filter]
             log.info(f'===== split {split}: {len(subjects)} 个被试，'

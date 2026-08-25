@@ -8,7 +8,7 @@ obtain_camera_intrinsics.md §2）。
 
 用法（仓库根目录）：
     python preprocess/zhang2015-insightface/gazecapture/generate_calibration.py \
-        [--output-dir /media/hitsz/ylx/GazeCapture/calibration]
+        [--output-dir /media/hitsz/zyx/GazeCapture/calibration]
 """
 import argparse
 from pathlib import Path
@@ -19,7 +19,7 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 FRONT_CAMERAS = HERE / 'front_cameras.yaml'
-DEFAULT_OUTPUT = Path('/media/hitsz/ylx/GazeCapture/calibration')
+DEFAULT_OUTPUT = Path('/media/hitsz/zyx/GazeCapture/calibration')
 
 
 def slugify(device_name):

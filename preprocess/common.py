@@ -1,7 +1,7 @@
 """预处理公共：失败样本记录、一次运行的日志目录管理
 
-一次预处理（preprocess.py 的一次调用）在 preprocess/log/ 下建一个运行目录：
-    preprocess/log/<dataset>_<时间戳>/
+一次预处理（preprocess.py 的一次调用）在其管线目录下建运行目录：
+    preprocess/<method>/log/<dataset>_<时间戳>/
     ├── run.log        分级日志（时间+级别+文件:行号，与训练日志同规范）
     └── failures.json  失败/跳过样本清单（原因分类汇总 + 明细）
 """
@@ -12,7 +12,7 @@ from collections import Counter
 
 from utils.logger import attach_file_handler, get_logger
 
-LOG_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'log')
+PREPROCESS_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 class FailureRecorder:
@@ -43,10 +43,11 @@ class FailureRecorder:
         return doc
 
 
-def new_run_dir(dataset_name):
-    """创建本次预处理的运行目录并挂载文件日志，返回目录路径"""
+def new_run_dir(method, dataset_name):
+    """在管线 preprocess/<method>/log/ 下创建本次运行目录并挂载文件日志，返回目录路径"""
     run_dir = os.path.join(
-        LOG_ROOT, f'{dataset_name}_{time.strftime("%Y%m%d_%H%M%S")}')
+        PREPROCESS_ROOT, method, 'log',
+        f'{dataset_name}_{time.strftime("%Y%m%d_%H%M%S")}')
     os.makedirs(run_dir, exist_ok=True)
     attach_file_handler(os.path.join(run_dir, 'run.log'), append=False)
     get_logger('preprocessor').info(f'预处理运行目录: {run_dir}')

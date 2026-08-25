@@ -9,8 +9,8 @@
 # 帧有效性由 face_PoG_tobii/validity + 本管线成败决定（检不到脸 = no_face_detected）。
 # 详细勘探与公式验证见 preprocess/zhang2015-insightface/eve/dataset_report.md。
 name: eve
-raw_data_dir: /media/hitsz/ylx/EVE_dataset/eve_dataset
-output_dir: /home/hitsz/dataset/eve_insightface_224
+raw_data_dir: /media/hitsz/zyx/EVE_dataset/eve_dataset
+output_dir: /media/hitsz/ylx/eve_insightface_224
 cameras: [basler, webcam_l, webcam_c, webcam_r]   # 四相机全用，同一时刻四视角
 target_hz: 5            # 采样率：interval = round(fps/target_hz)，basler 每 12 帧、webcam 每 6 帧
 splits:                 # 平台划分：官方 train39 训练，官方 val05 → test（D3）
@@ -25,3 +25,4 @@ max_steps: 0            # 调试：每被试只处理前 N 个 step（0 = 全部
 max_frames: 0           # 调试：每 step 只处理流内前 N 帧（0 = 全部）
 num_read_workers: 1     # mp4 预读线程（顺序解码 0.7ms/帧 << 检测 11.6ms，单线程足够）
 providers: [CUDAExecutionProvider, CPUExecutionProvider]  # insightface 推理后端
+landmarks_dir: ""   # 非空 = 从该目录的 landmarks h5 索引遍历并读取已提取特征点（跳过 insightface 检测）

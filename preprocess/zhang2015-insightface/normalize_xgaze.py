@@ -45,6 +45,8 @@ class XGazePreprocessor:
 
     def __init__(self, config):
         self.config = config
+        # landmarks 模式：从已抽取的特征点 h5 索引遍历（跳过 insightface 检测）
+        self.landmarks_dir = getattr(config, 'landmarks_dir', '') or None
         self.cams = [c for c in range(self.NUM_CAMS)
                      if c not in self.EXCLUDE_CAMERAS]
         # 独立加载本管线目录下的 3D face model ((3,6) x 50 行文本 -> 50 个三维点)
@@ -83,16 +85,34 @@ class XGazePreprocessor:
         subject_dir = Path(self.config.raw_data_dir) / self.config.sub_folder \
             / f"subject{subject_index:04d}"
         gaze_pts = self.load_annotations(subject_index)
-        frame_dirs = sorted(d for d in subject_dir.iterdir()
-                            if d.name.startswith("frame"))
+
+        by_frame = None           # landmarks 模式: {frame: [(cam, 行号), ...]}
+        lm_cache = None
+        if self.landmarks_dir:
+            with h5py.File(Path(self.landmarks_dir) /
+                           f"subject{subject_index:04d}.h5", "r") as f:
+                fr = f["frame_index"][:].ravel()
+                ci = f["cam_index"][:].ravel()
+                lm_cache = f["facial_landmarks_2d"][:]
+            by_frame = {}
+            for r in range(len(fr)):
+                by_frame.setdefault(int(fr[r]), []).append((int(ci[r]), r))
+            frame_dirs = [subject_dir / f"frame{fi:04d}"
+                          for fi in sorted(by_frame)]
+            log.info(f"subject{subject_index:04d}: landmarks 模式, "
+                     f"{len(frame_dirs)} 帧 x {len(fr)} 行, 标注 {len(gaze_pts)} 条")
+        else:
+            frame_dirs = sorted(d for d in subject_dir.iterdir()
+                                if d.name.startswith("frame"))
+            log.info(f"subject{subject_index:04d}: {len(frame_dirs)} 帧 "
+                     f"x {len(self.cams)} 相机, 标注 {len(gaze_pts)} 条")
         if getattr(self.config, 'max_frames', 0):
             frame_dirs = frame_dirs[:self.config.max_frames]  # 调试：只处理前 N 帧
-        log.info(f"subject{subject_index:04d}: {len(frame_dirs)} 帧 "
-                 f"x {len(self.cams)} 相机, 标注 {len(gaze_pts)} 条")
 
         out_path = Path(self.config.output_dir) / f"subject{subject_index:04d}.h5"
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        n_max = len(frame_dirs) * self.NUM_CAMS
+        n_max = sum(len(v) for k, v in (by_frame or {}).items()) \
+            if by_frame else len(frame_dirs) * self.NUM_CAMS
         h5 = h5py.File(out_path, "w")
         dsets = self._create_datasets(h5, n_max)
 
@@ -108,9 +128,11 @@ class XGazePreprocessor:
                 with ThreadPoolExecutor(
                         max_workers=self.config.num_read_workers) as ex:
                     for fd in frame_dirs:
-                        imgs = dict(zip(self.cams, ex.map(
+                        cams = ([c for c, _ in by_frame[int(fd.name[5:])]]
+                                if by_frame is not None else self.cams)
+                        imgs = dict(zip(cams, ex.map(
                             lambda c: cv2.imread(str(fd / f"cam{c:02d}.JPG")),
-                            self.cams)))
+                            cams)))
                         q.put((fd, imgs))
                 q.put(None)
             except Exception as e:  # 读线程异常传回主线程, 避免主线程卡在 q.get()
@@ -129,8 +151,10 @@ class XGazePreprocessor:
                     raise item
                 fd, imgs = item
                 frame_index = int(fd.name[5:])
+                rows = (by_frame[frame_index] if by_frame is not None
+                        else [(c, None) for c in self.cams])
                 n_ok = 0
-                for cam in self.cams:
+                for cam, row in rows:
                     img = imgs.get(cam)
                     if img is None:
                         recorder.add(subject_index,
@@ -139,13 +163,16 @@ class XGazePreprocessor:
                         continue
                     if cam in self.FLIP_CAMERAS:
                         img = cv2.rotate(img, cv2.ROTATE_180)
-                    faces = app.get(img)
-                    if len(faces) == 0:
-                        recorder.add(subject_index,
-                                     f"frame{frame_index:04d}/cam{cam:02d}",
-                                     'no_face_detected')
-                        continue
-                    lm106 = faces[0].landmark_2d_106
+                    if lm_cache is not None:
+                        lm106 = lm_cache[row]           # 已提取特征点，跳过检测
+                    else:
+                        faces = app.get(img)
+                        if len(faces) == 0:
+                            recorder.add(subject_index,
+                                         f"frame{frame_index:04d}/cam{cam:02d}",
+                                         'no_face_detected')
+                            continue
+                        lm106 = faces[0].landmark_2d_106
                     gaze_point = gaze_pts.get((frame_index, cam))
                     if gaze_point is None:
                         recorder.add(subject_index,
@@ -208,16 +235,25 @@ class XGazePreprocessor:
     # ------------------------------------------------------------------ 入口
     def run(self, recorder: FailureRecorder):
         """按配置处理全部（或指定）受试者，返回总样本数"""
-        from insightface.app import FaceAnalysis
-        app = FaceAnalysis("buffalo_l",
-                           allowed_modules=["detection", "landmark_2d_106"],
-                           providers=self.config.providers)
-        app.prepare(ctx_id=0)
+        app = None
+        if self.landmarks_dir:
+            log.info(f"landmarks 模式: 索引遍历 {self.landmarks_dir}（跳过 insightface 检测）")
+        else:
+            from insightface.app import FaceAnalysis
+            app = FaceAnalysis("buffalo_l",
+                               allowed_modules=["detection", "landmark_2d_106"],
+                               providers=self.config.providers)
+            app.prepare(ctx_id=0)
 
-        dataset_path = Path(self.config.raw_data_dir) / self.config.sub_folder
-        subjects = self.config.subjects if self.config.subjects else sorted(
-            int(d.name[7:]) for d in dataset_path.iterdir()
-            if d.name.startswith("subject"))
+        if self.landmarks_dir:
+            dataset_path = Path(self.landmarks_dir)
+            subjects = self.config.subjects if self.config.subjects else sorted(
+                int(d.name[7:-3]) for d in dataset_path.glob("subject*.h5"))
+        else:
+            dataset_path = Path(self.config.raw_data_dir) / self.config.sub_folder
+            subjects = self.config.subjects if self.config.subjects else sorted(
+                int(d.name[7:]) for d in dataset_path.iterdir()
+                if d.name.startswith("subject"))
 
         log.info(f"{self.config.sub_folder} 共 {len(subjects)} 个受试者: {subjects}")
         log.info(f"输出目录: {self.config.output_dir}")

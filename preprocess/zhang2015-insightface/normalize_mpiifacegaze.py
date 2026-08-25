@@ -68,13 +68,39 @@ def load_annotations(subject, raw_data_dir):
 
 
 def process_subject(subject, app, config, recorder):
-    """单个受试者完整归一化 -> output_dir/pXX.h5, 返回写入样本数."""
+    """单个受试者完整归一化 -> output_dir/pXX.h5, 返回写入样本数.
+
+    landmarks 模式（config.landmarks_dir 非空）：从已抽取特征点 h5 索引遍历，
+    跳过 insightface 检测；帧集 = landmarks h5 的行（原始图路径由 day+name 反推）。
+    """
+    landmarks_dir = getattr(config, 'landmarks_dir', '') or None
     camera_matrix, distortion = load_camera(subject, config.raw_data_dir)
     day_groups = load_annotations(subject, config.raw_data_dir)
-    if getattr(config, 'max_days', 0):
-        day_groups = day_groups[:config.max_days]   # 调试：只处理前 N 天
-    n_rows = sum(len(rows) for _, rows in day_groups)
-    log.info(f"{subject}: {len(day_groups)} 天, {n_rows} 张标注图")
+
+    lm_cache, rows_by_day = None, None
+    if landmarks_dir:
+        with h5py.File(Path(landmarks_dir) / f"{subject}.h5", "r") as f:
+            days = f["day_index"][:].ravel()
+            names = [s.decode() if isinstance(s, bytes) else str(s)
+                     for s in f["image_name"][:]]
+            lm_cache = f["facial_landmarks_2d"][:]
+        # 标注查询表 {(day_str, image_name): gt}，manifest 行据此取 gt
+        gt_map = {(day, img_path.name): gt
+                  for day, rows_ in day_groups for _, img_path, gt in rows_}
+        rows_by_day = {}
+        for r in range(len(days)):
+            rows_by_day.setdefault(int(days[r]), []).append(
+                (r, names[r], Path(config.raw_data_dir) / subject /
+                 f"day{days[r]:02d}" / names[r]))
+        n_rows = len(days)
+        log.info(f"{subject}: landmarks 模式, {len(rows_by_day)} 天, {n_rows} 行")
+        iter_days = sorted(rows_by_day.items())      # (day_id, [(row, name, path)])
+    else:
+        if getattr(config, 'max_days', 0):
+            day_groups = day_groups[:config.max_days]   # 调试：只处理前 N 天
+        n_rows = sum(len(rows) for _, rows in day_groups)
+        log.info(f"{subject}: {len(day_groups)} 天, {n_rows} 张标注图")
+        iter_days = day_groups                          # (day_str, [(id, path, gt)])
 
     out_path = Path(config.output_dir) / f"{subject}.h5"
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -106,9 +132,12 @@ def process_subject(subject, app, config, recorder):
     def read_days():
         try:
             with ThreadPoolExecutor(max_workers=config.num_read_workers) as ex:
-                for day, rows in day_groups:
-                    imgs = dict(zip([r[0] for r in rows], ex.map(
-                        lambda r: cv2.imread(str(r[1])), rows)))
+                for day, rows in iter_days:
+                    items = ([(row, path) for row, _, path in rows]
+                             if lm_cache is not None else
+                             [(img_id, img_path) for img_id, img_path, _ in rows])
+                    imgs = dict(zip([k for k, _ in items], ex.map(
+                        lambda t: cv2.imread(str(t[1])), items)))
                     q.put((day, rows, imgs))
             q.put(None)
         except Exception as e:  # 读线程异常传回主线程
@@ -116,7 +145,7 @@ def process_subject(subject, app, config, recorder):
 
     threading.Thread(target=read_days, daemon=True).start()
 
-    pbar = tqdm(total=len(day_groups), desc=subject, unit="天",
+    pbar = tqdm(total=len(iter_days), desc=subject, unit="天",
                 ncols=100, leave=False)
     try:
         while True:
@@ -126,37 +155,65 @@ def process_subject(subject, app, config, recorder):
             if isinstance(item, Exception):
                 raise item
             day, rows, imgs = item
-            day_id = int(day[3:])
+            day_id = int(day[3:]) if isinstance(day, str) else int(day)
             n_ok = 0
-            for img_id, img_path, gt in rows:
-                img = imgs.get(img_id)
-                if img is None:
-                    recorder.add(subject, img_path.name, 'imread_failed')
-                    continue
-                faces = app.get(img)
-                if len(faces) == 0:
-                    recorder.add(subject, f"{day}/{img_path.name}", 'no_face_detected')
-                    continue
-                lm106 = faces[0].landmark_2d_106
-                landmarks2d = lm106[IDX6, :].reshape(6, 1, 2).astype(float)
-                rvec, tvec = estimateHeadPose(landmarks2d, FACE_MODEL_USE,
-                                              camera_matrix, distortion)
-                img_warped, hr_norm, gc_normalized = normalizeData_face(
-                    img, FACE_MODEL_USE, rvec, tvec, gt, camera_matrix)[:3]
-                # hR_norm = R @ hR  =>  R = hR_norm @ hR^T (旋转矩阵逆=转置)
-                R = cv2.Rodrigues(hr_norm)[0] @ cv2.Rodrigues(rvec)[0].T
-                g_theta, g_phi = vector_to_angles(gc_normalized.flatten())
+            if lm_cache is not None:
+                # landmarks 模式: 行号 -> 已提取特征点 + 标注表查 gt
+                for row, name, img_path in rows:
+                    img = imgs.get(row)
+                    if img is None:
+                        recorder.add(subject, name, 'imread_failed')
+                        continue
+                    lm106 = lm_cache[row]
+                    gt = gt_map.get((f"day{day_id:02d}", name))
+                    if gt is None:
+                        recorder.add(subject, f"day{day_id:02d}/{name}", 'no_annotation')
+                        continue
+                    landmarks2d = lm106[IDX6, :].reshape(6, 1, 2).astype(float)
+                    rvec, tvec = estimateHeadPose(landmarks2d, FACE_MODEL_USE,
+                                                  camera_matrix, distortion)
+                    img_warped, hr_norm, gc_normalized = normalizeData_face(
+                        img, FACE_MODEL_USE, rvec, tvec, gt, camera_matrix)[:3]
+                    R = cv2.Rodrigues(hr_norm)[0] @ cv2.Rodrigues(rvec)[0].T
+                    g_theta, g_phi = vector_to_angles(gc_normalized.flatten())
+                    dsets["day_index"][n] = day_id
+                    dsets["image_name"][n] = name
+                    dsets["face_patch"][n] = img_warped
+                    dsets["face_mat_norm"][n] = R
+                    dsets["facial_landmarks_2d"][n] = lm106
+                    dsets["face_gaze"][n] = (g_theta, g_phi)
+                    n += 1
+                    n_ok += 1
+            else:
+                for img_id, img_path, gt in rows:
+                    img = imgs.get(img_id)
+                    if img is None:
+                        recorder.add(subject, img_path.name, 'imread_failed')
+                        continue
+                    faces = app.get(img)
+                    if len(faces) == 0:
+                        recorder.add(subject, f"{day}/{img_path.name}", 'no_face_detected')
+                        continue
+                    lm106 = faces[0].landmark_2d_106
+                    landmarks2d = lm106[IDX6, :].reshape(6, 1, 2).astype(float)
+                    rvec, tvec = estimateHeadPose(landmarks2d, FACE_MODEL_USE,
+                                                  camera_matrix, distortion)
+                    img_warped, hr_norm, gc_normalized = normalizeData_face(
+                        img, FACE_MODEL_USE, rvec, tvec, gt, camera_matrix)[:3]
+                    # hR_norm = R @ hR  =>  R = hR_norm @ hR^T (旋转矩阵逆=转置)
+                    R = cv2.Rodrigues(hr_norm)[0] @ cv2.Rodrigues(rvec)[0].T
+                    g_theta, g_phi = vector_to_angles(gc_normalized.flatten())
 
-                dsets["day_index"][n] = day_id
-                dsets["image_name"][n] = img_path.name
-                dsets["face_patch"][n] = img_warped
-                dsets["face_mat_norm"][n] = R
-                dsets["facial_landmarks_2d"][n] = lm106
-                dsets["face_gaze"][n] = (g_theta, g_phi)
-                n += 1
-                n_ok += 1
+                    dsets["day_index"][n] = day_id
+                    dsets["image_name"][n] = img_path.name
+                    dsets["face_patch"][n] = img_warped
+                    dsets["face_mat_norm"][n] = R
+                    dsets["facial_landmarks_2d"][n] = lm106
+                    dsets["face_gaze"][n] = (g_theta, g_phi)
+                    n += 1
+                    n_ok += 1
             pbar.update(1)
-            pbar.set_postfix({"天": day, "入库": f"{n_ok}/{len(rows)}", "样本": n})
+            pbar.set_postfix({"天": str(day), "入库": f"{n_ok}/{len(rows)}", "样本": n})
     finally:
         pbar.close()
         for d in dsets.values():
@@ -170,14 +227,23 @@ def process_subject(subject, app, config, recorder):
 
 def run(config, recorder):
     """preprocess.py 入口：按配置处理全部（或指定）受试者，返回总样本数"""
-    from insightface.app import FaceAnalysis
-    app = FaceAnalysis("buffalo_l", allowed_modules=["detection", "landmark_2d_106"],
-                       providers=config.providers)
-    app.prepare(ctx_id=0)
+    landmarks_dir = getattr(config, 'landmarks_dir', '') or None
+    app = None
+    if landmarks_dir:
+        log.info(f"landmarks 模式: 索引遍历 {landmarks_dir}（跳过 insightface 检测）")
+    else:
+        from insightface.app import FaceAnalysis
+        app = FaceAnalysis("buffalo_l", allowed_modules=["detection", "landmark_2d_106"],
+                           providers=config.providers)
+        app.prepare(ctx_id=0)
 
-    raw_dir = Path(config.raw_data_dir)
-    subjects = config.subjects if config.subjects else sorted(
-        d.name for d in raw_dir.iterdir() if d.is_dir() and d.name.startswith("p"))
+    if landmarks_dir:
+        subjects = config.subjects if config.subjects else sorted(
+            p.name[:-3] for p in Path(landmarks_dir).glob("p*.h5"))
+    else:
+        raw_dir = Path(config.raw_data_dir)
+        subjects = config.subjects if config.subjects else sorted(
+            d.name for d in raw_dir.iterdir() if d.is_dir() and d.name.startswith("p"))
     log.info(f"MPIIFaceGaze 共 {len(subjects)} 个受试者: {subjects}")
     log.info(f"输出目录: {config.output_dir}")
     total_n = 0

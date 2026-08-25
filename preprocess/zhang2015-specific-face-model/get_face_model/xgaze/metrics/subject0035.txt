@@ -1,0 +1,10 @@
+# 相机数 8 | train RMS 中位 2.86 px | test RMS 中位 5.51 px | 通用模型 test RMS 中位 24.26 px | 改善 4.4x | IOD 均值 89.3 mm
+# camera  n_train_kept  train_rms_px  test_rms_px  test_rms_generic_px  iod_mm
+cam00  30  2.85  5.19  24.07  89.6
+cam01  29  2.73  4.54  23.83  89.6
+cam02  30  3.13  5.83  26.12  89.3
+cam08  29  2.63  4.89  23.92  89.5
+cam09  29  2.87  4.59  24.45  89.3
+cam10  29  4.00  7.38  31.70  88.4
+cam16  29  3.02  6.16  32.82  89.6
+cam17  29  2.83  6.15  23.62  89.5

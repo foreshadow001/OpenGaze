@@ -3,11 +3,12 @@
 新增数据集：在 datasets/ 下加一个模块（提供 get_train_loader / get_test_loader），
 并注册到 DATASETS。
 """
-from . import mpiifacegaze, xgaze
+from . import eve, mpiifacegaze, xgaze
 
 DATASETS = {
     'xgaze': xgaze,
     'mpiifacegaze': mpiifacegaze,
+    'eve': eve,
 }
 
 

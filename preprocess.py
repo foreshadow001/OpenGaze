@@ -9,7 +9,7 @@
 目录名含连字符不是合法包名，故由本入口用 importlib 按文件路径加载，
 脚本命名约定 normalize_<dataset>.py）。
 
-每次运行在 preprocess/log/<dataset>_<时间戳>/ 下留档：
+每次运行在 preprocess/<method>/log/<dataset>_<时间戳>/ 下留档：
     run.log        分级日志（与训练日志同规范）
     failures.json  失败/跳过样本清单（原因汇总 + 明细）
 """
@@ -80,7 +80,7 @@ def main():
     apply_overrides(config, args.set)
 
     # 管线目录下按数据集定位预处理器（文件或目录两种形式）
-    run_dir = new_run_dir(args.dataset)
+    run_dir = new_run_dir(args.method, args.dataset)
     log.info(f'数据集: {args.dataset} | 管线: {args.method} | 配置: {config_path}')
     for key, value in vars(config).items():
         log.info(f'  {key}: {value}')
