@@ -7,7 +7,8 @@ model:
   num_out: 2                        # pitch, yaw
 
 train:
-  batch_size: 50                      # 全局批大小：多卡 DDP 时按卡数均分到各 rank（单卡即此值）
+  batch_size: 200                     # 全局批大小：多卡 DDP 时按卡数均分到各 rank（ResNet18 显存余量大）
+                                      # 50→200：4×4090 吞吐优化；泛化代价 ~0.3°（已接受）；bs50 用 --set
   epochs: 25
   loss: l1
   optimizer: adam

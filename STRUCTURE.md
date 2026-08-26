@@ -26,7 +26,8 @@ Gaze/
 │   │       ├── gazecapture.yaml      #     引用 splits/ 下的官方 session 级划分
 │   │       └── eve.yaml
 │   └── splits/                       # 数据集官方划分（独立共享：预处理与训练配置都引用）
-│       └── gazecapture_sessions.yaml #   GazeCapture：train 1321（含官方 val）/ test 150 session + excluded 3
+│       ├── gazecapture_sessions.yaml #   GazeCapture 官方全量：train 1321（含 val）/ test 150 + excluded 3（预处理用）
+│       └── gazecapture_faze.yaml     #   GazeCapture FAZE 式被试筛选：train ≥500 帧 → 1069 / test ≥1000 帧 → 123（训练用）
 │
 ├── datasets/                         # 数据集加载（统一 h5 格式）
 │   ├── __init__.py                   #   build_train_loader / build_test_loader 工厂

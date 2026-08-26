@@ -25,7 +25,9 @@ _FILE_FMT = '%(asctime)s | %(levelname)-7s | %(filename)s:%(lineno)d | %(message
 
 
 def get_logger(name=None):
-    """获取模块 logger：get_logger(__name__) → opengaze.trainers.trainer 等"""
+    """获取模块 logger：get_logger(__name__) → opengaze.trainers.trainer 等。
+    同时确保根 logger 已挂 console handler（否则独立脚本/早期调用方的 INFO 会被静默丢弃）"""
+    _ensure_root_logger()
     if not name or name == ROOT_LOGGER_NAME:
         return logging.getLogger(ROOT_LOGGER_NAME)
     if name.startswith(ROOT_LOGGER_NAME + '.'):

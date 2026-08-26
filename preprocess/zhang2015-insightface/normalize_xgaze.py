@@ -180,11 +180,13 @@ class XGazePreprocessor:
                                      'no_annotation')
                         continue
                     camera_matrix, distortion = self.calibs[cam]
-                    landmarks2d = lm106[self.IDX6, :].reshape(6, 1, 2).astype(float)
+                    model_pnp, model_norm, lm_idx = self._geometry_for(
+                        subject_index, cam)
+                    landmarks2d = lm106[lm_idx, :].reshape(len(lm_idx), 1, 2).astype(float)
                     rvec, tvec = estimateHeadPose(
-                        landmarks2d, self.face_model_use, camera_matrix, distortion)
+                        landmarks2d, model_pnp, camera_matrix, distortion)
                     img_warped, hr_norm, gc_normalized = normalizeData_face(
-                        img, self.face_model_use, rvec, tvec, gaze_point,
+                        img, model_norm, rvec, tvec, gaze_point,
                         camera_matrix)[:3]
                     # hR_norm = R @ hR  =>  R = hR_norm @ hR^T (旋转矩阵逆=转置)
                     R = cv2.Rodrigues(hr_norm)[0] @ cv2.Rodrigues(rvec)[0].T
@@ -210,6 +212,14 @@ class XGazePreprocessor:
         log.info(f"subject{subject_index:04d} 完成: {n} 样本 -> {out_path.name} "
                  f"({(time.time() - t_sub) / 60:.1f} min)")
         return n
+
+    def _geometry_for(self, subject_index, cam):
+        """逐 (被试, 相机) 的几何三元组：(PnP 模型, 归一化模型, 特征点索引)。
+
+        基类：通用 6 点模型 + IDX6（zhang2015-insightface 语义）。
+        zhang2015-specific-face-model 管线覆写此方法注入个性化模型（缺失回退通用）。
+        """
+        return self.face_model_use, self.face_model_use, self.IDX6
 
     @staticmethod
     def _create_datasets(h5, n_max):

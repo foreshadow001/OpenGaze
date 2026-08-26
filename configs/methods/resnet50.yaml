@@ -8,7 +8,9 @@ model:
   num_out: 2                        # pitch, yaw
 
 train:
-  batch_size: 50                      # 全局批大小：多卡 DDP 时按卡数均分到各 rank（单卡即此值）
+  batch_size: 200                     # 全局批大小：多卡 DDP 时按卡数均分到各 rank；单卡即此值（峰值 ~16.5G）
+                                      # 50→200：4×4090 吞吐 794→2083 img/s，泛化代价 ~0.25-0.35°
+                                      # （eve/MPII 5ep 代理实测，已接受）；要 bs50 语义用 --set method.train.batch_size=50
   epochs: 25
   loss: l1
   optimizer: adam

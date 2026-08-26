@@ -1,0 +1,5 @@
+# 设备 iPhone 5 | 朝向组 ['ori1', 'ori3', 'ori4'] | train RMS 中位 0.39 px | test RMS 中位 0.74 px | 通用模型 test RMS 中位 1.03 px | 改善 1.4x | IOD 均值 90.9 mm
+# group  n_train_kept  train_rms_px  test_rms_px  test_rms_generic_px  iod_mm
+ori1  9  0.39  0.77  0.98  91.0
+ori3  9  0.31  0.74  1.03  90.8
+ori4  11  0.42  0.67  1.33  90.8

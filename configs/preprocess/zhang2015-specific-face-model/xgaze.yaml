@@ -1,0 +1,15 @@
+# zhang2015-specific-face-model 版 XGaze 归一化配置（协议见 preprocess/zhang2015-specific-face-model/normalization_protocol.md）
+# 与 zhang2015-insightface 版同构；差异：仅 landmarks 模式（必填）、逐相机个性化模型、
+# 输出到 2TB SATA 固态（/media/yanglinxuan/sfm，挂载后生效；小样本验证可 --set output_dir 覆盖）
+name: xgaze
+raw_data_dir: /media/yanglinxuan/Expansion/xgaze_raw/data       # 原始数据（读图）
+sub_folder: train
+annotation_dir: /media/yanglinxuan/Expansion/xgaze_raw/data/annotation_train   # 标注 CSV
+calib_dir: /media/yanglinxuan/Expansion/xgaze_raw/calibration/cam_calibration # 相机标定 xml
+output_dir: /media/yanglinxuan/sfm/xgaze_specific_224           # 输出目录（每人一个 h5，lzf）
+face_model_root: /media/yanglinxuan/ylx/xgaze_specific_face_model/face_models # 个性化模型
+landmarks_dir: /media/yanglinxuan/Expansion/xgaze_raw/data/landmarks          # 必填：landmarks 索引
+pnp_points: 6          # D1 决策 A：PnP 用 6 点（model6+IDX6）；A/B 对比时 --set pnp_points=28
+subjects: []           # 空列表 = 全部受试者；指定则如 [0, 3]
+max_frames: 0          # 调试用：只处理每人前 N 帧（0 = 全部）
+num_read_workers: 8    # 读图线程数

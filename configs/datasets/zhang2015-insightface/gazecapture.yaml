@@ -1,22 +1,24 @@
 # GazeCapture 数据集配置（预处理产物：zhang2015-insightface 管线，BGR 存储）
-# 官方划分为 session 级：train 1321（官方 val 50 已并入，本平台不用验证集）/ test 150，
-# excluded 3（01185/01730/02065，预处理即跳过）——session 列表与预处理共用同一份
-# configs/splits/gazecapture_sessions.yaml（iTracker 官方 metadata 提取，见其头注释）。
-# session 数量大（1471 个，跨设备/被试），不做 LOO，直接用官方 train/test 划分。
+# 训练/测试协议参考 FAZE（ICCV19）的被试级筛选（无 few-shot、用全帧；2026-08-26 定稿）：
+#   train: 官方 train 1321 session 中样本数 ≥500 → 1069 session，1,942,187 帧（低于 500 不参与训练）
+#   test : 官方 test 150 session 中样本数 ≥1000 → 123 session，259,776 帧（低于 1000 不参与测试；
+#          FAZE 只取每人最后 500 帧做评测；本平台无校准环节，直接用该被试全部帧）
+# 筛选后的 session 列表在 configs/splits/gazecapture_faze.yaml（按预处理产物帧数生成，
+# 见其头注释）；官方全量划分 gazecapture_sessions.yaml 仅供预处理使用。
 name: gazecapture
 data_dir: /media/yanglinxuan/ylx/gazecapture_insightface_224
 
 split:
   train:
     sub_folder: train
-    split_file: configs/splits/gazecapture_sessions.yaml   # session 列表来源（仓库相对路径）
+    split_file: configs/splits/gazecapture_faze.yaml   # FAZE 式筛选后的 session 列表
     split_key: train
   test:
     sub_folder: test
-    split_file: configs/splits/gazecapture_sessions.yaml
+    split_file: configs/splits/gazecapture_faze.yaml
     split_key: test
 
 dataloader:
   num_workers: 5
-  train_sample_size: 0              # 0 = 全量训练（train 1,311,463 / test 179,496 帧）
+  train_sample_size: 0              # 0 = 全量训练
   test_sample_size: 0
