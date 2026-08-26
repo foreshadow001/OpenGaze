@@ -9,7 +9,7 @@ split 模式：
 """
 from torch.utils.data import DataLoader
 
-from .base import GazeH5Dataset
+from .base import GazeH5Dataset, make_train_loader
 
 
 def _split_subjects(split):
@@ -32,7 +32,7 @@ def _split_subjects(split):
 
 
 def get_train_loader(dataset_config, batch_size, num_workers,
-                     sample_size=0, is_shuffle=True):
+                     sample_size=0, is_shuffle=True, distributed=False):
     train_subjects, _ = _split_subjects(dataset_config.split)
     split = dataset_config.split
     train_set = GazeH5Dataset(
@@ -43,7 +43,7 @@ def get_train_loader(dataset_config, batch_size, num_workers,
         sample_size=sample_size,
         bgr_to_rgb=True,   # 预处理管线与 xgaze 同构，BGR 存储
     )
-    return DataLoader(train_set, batch_size=batch_size, num_workers=num_workers)
+    return make_train_loader(train_set, batch_size, num_workers, distributed)
 
 
 def get_test_loader(dataset_config, batch_size, num_workers, sample_size=0):

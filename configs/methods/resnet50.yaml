@@ -8,7 +8,7 @@ model:
   num_out: 2                        # pitch, yaw
 
 train:
-  batch_size: 50
+  batch_size: 50                      # 全局批大小：多卡 DDP 时按卡数均分到各 rank（单卡即此值）
   epochs: 25
   loss: l1
   optimizer: adam

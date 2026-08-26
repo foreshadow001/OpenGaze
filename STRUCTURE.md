@@ -8,28 +8,33 @@
 ```
 Gaze/
 ├── configs/
+│   ├── common.yaml                   # 平台公共配置（gpus 用卡列表，脚本与 main.py 共享）
 │   ├── datasets/                     # 数据集配置：数据位置、划分方式、加载参数
-│   │   ├── xgaze.yaml
-│   │   ├── mpiifacegaze.yaml
-│   │   ├── gazecapture.yaml
-│   │   └── eve.yaml
+│   │   └── zhang2015-insightface/    #   按预处理管线分文件夹（--dataset 传「管线/数据集」）
+│   │       ├── xgaze.yaml
+│   │       ├── xgaze_smoke.yaml
+│   │       ├── mpiifacegaze.yaml
+│   │       ├── gazecapture.yaml      #     session 列表引用 splits/ 官方划分
+│   │       └── eve.yaml
 │   ├── methods/                      # 方法配置：模型结构 + 训练策略
 │   │   ├── resnet18.yaml
 │   │   └── resnet50.yaml
-│   └── preprocess/                   # 预处理配置（输入输出路径、被试列表、线程数）
-│       ├── xgaze.yaml                #   xgaze 特有：annotation_dir / calib_dir / sub_folder
-│       ├── mpiifacegaze.yaml
-│       └── gazecapture.yaml          #   引用 splits/ 下的官方 session 级划分
+│   ├── preprocess/                   # 预处理配置（输入输出路径、被试列表、线程数）
+│   │   └── zhang2015-insightface/    #   同样按预处理管线分文件夹
+│   │       ├── xgaze.yaml            #     xgaze 特有：annotation_dir / calib_dir / sub_folder
+│   │       ├── mpiifacegaze.yaml
+│   │       ├── gazecapture.yaml      #     引用 splits/ 下的官方 session 级划分
+│   │       └── eve.yaml
 │   └── splits/                       # 数据集官方划分（独立共享：预处理与训练配置都引用）
-│       └── gazecapture_sessions.yaml #   GazeCapture：train 1271 / val 50 / test 150 session + excluded 3
+│       └── gazecapture_sessions.yaml #   GazeCapture：train 1321（含官方 val）/ test 150 session + excluded 3
 │
 ├── datasets/                         # 数据集加载（统一 h5 格式）
 │   ├── __init__.py                   #   build_train_loader / build_test_loader 工厂
 │   ├── base.py                       #   GazeH5Dataset：统一 h5 读取基类（懒加载 + swmr）
 │   ├── xgaze.py                      #   ETH-XGaze：按配置 split 段读取（官方数据已是 h5，直接兼容）
 │   ├── mpiifacegaze.py               #   leave_one_out / all_subjects 两种 split 模式
-│   ├── gazecapture.py                #   读预处理后的 h5（官方 train/val/test 划分，待实现）
-│   └── eve.py                        #   读预处理后的 h5（官方 train/val/test 划分，待实现）
+│   ├── gazecapture.py                #   session 列表从 configs/splits/ 读（官方 train/test，无 LOO）
+│   └── eve.py                        #   train39 / val05（平台 test）
 │
 ├── models/
 │   ├── __init__.py                   #   build_model() 工厂：按 config.model.name 分发
@@ -56,14 +61,16 @@ Gaze/
 │   └── trainer.py                    # 训练器（合并原 main.py 中的 tqdm 补丁；输出统一写入 exp/expNN）
 │
 ├── scripts/                          # 运行脚本
-│   ├── common.sh                     #   公共函数：python 路径、latest_exp、require_exp 校验
-│   ├── resnet18/                     #   结构与方法一一对应
-│   │   ├── within-dataset/           #     每数据集一个：训练+测试一条龙（每次新开实验）
-│   │   └── cross-dataset/            #     n(n-1) 个 A→B 评测（REUSE_EXP 指定）；all.sh 按源 <大写名>_EXP
-│   └── resnet50/                     #   同上
+│   ├── common.sh                     #   公共函数：python 路径、latest_exp、require_exp 校验、
+│   │                                #   py() 启动器（卡列表读 configs/common.yaml 的 gpus；多卡 torchrun、单卡直接 python）
+│   └── zhang2015-insightface/        #   一级 = 预处理管线，二级 = 方法（method）
+│       ├── resnet18/                 #   结构与方法一一对应
+│       │   ├── within-dataset/       #     每数据集一个：训练+测试一条龙（训练多卡、测试单卡）
+│       │   └── cross-dataset/        #     n(n-1) 个 A→B 评测（REUSE_EXP 指定）；all.sh 按源 <大写名>_EXP
+│       └── resnet50/                 #   同上
 │
-├── main.py                           # 训练/测试入口：python main.py --dataset xgaze --method resnet50
-├── preprocess.py                     # 预处理入口：python preprocess.py --dataset mpiifacegaze
+├── main.py                           # 训练/测试入口：python main.py --dataset zhang2015-insightface/xgaze --method resnet50
+├── preprocess.py                     # 预处理入口：python preprocess.py --dataset mpiifacegaze --method zhang2015-insightface
 ├── README.md
 ├── STRUCTURE.md
 ├── pyproject.toml                    # 项目与依赖声明（pip install -e .）
@@ -112,7 +119,7 @@ Gaze/
 - 损失：L1；指标：角度误差（度）
 - ETH-XGaze 官方 h5 内部为 BGR 存储，`datasets/xgaze.py` 加载时做 BGR→RGB 翻转（保持官方行为）；其余数据集预处理时直接存 RGB
 
-> 数据在盘：`/media/hitsz/ylx/` 下已有 `xgaze_224`、`MPIIFaceGaze`、`GazeCapture`、`EVE_dataset`（及 Gaze360，可作为后续扩展）。
+> 数据在盘：`/media/yanglinxuan/ylx/` 下已有 `xgaze_224`、`MPIIFaceGaze`、`GazeCapture`、`EVE_dataset`（及 Gaze360，可作为后续扩展）。
 > 另有已预处理的 `MPIIFaceGaze_normalized`、`mpiifacegaze_insightface_224`、`xgaze_insightface_224` 和 `~/data-preprocessing-gaze` 脚本，预处理阶段可参考复用。
 
 ## 3. yaml 配置设计
@@ -123,21 +130,21 @@ Gaze/
 
 存数据位置、训练/评测协议（固定划分或 leave-one-out）、划分信息、加载参数。
 
-`configs/datasets/xgaze.yaml`（官方 test 集无公开标注，从 train/ 目录 80 个被试中自划分 75 train + 5 test，划分列表直接写入配置）：
+`configs/datasets/zhang2015-insightface/xgaze.yaml`（官方 test 集无公开标注，从 80 个被试中自划分 75 train + 5 test，划分列表直接写入配置；训练用自预处理 insightface 版，h5 在根目录）：
 
 ```yaml
 name: xgaze
-data_dir: /media/hitsz/ylx/xgaze_224
+data_dir: /media/yanglinxuan/ylx/xgaze_insightface_224
 
 split:
   train:
-    sub_folder: train
+    sub_folder: ''
     subjects:                       # 75 个被试（subject0000.h5 …）
       - subject0000.h5
       - subject0003.h5
       - …
   test:
-    sub_folder: train               # 与 train 同目录，被试 subject0106~0111
+    sub_folder: ''                  # 同目录，被试 subject0106~0111
     subjects:
       - subject0106.h5
       - …
@@ -148,11 +155,11 @@ dataloader:
   test_sample_size: 0
 ```
 
-`configs/datasets/mpiifacegaze.yaml`（单一配置，`split.mode` 切换两种协议）：
+`configs/datasets/zhang2015-insightface/mpiifacegaze.yaml`（单一配置，`split.mode` 切换两种协议）：
 
 ```yaml
 name: mpiifacegaze
-data_dir: /media/hitsz/ylx/mpiifacegaze_insightface_224
+data_dir: /media/yanglinxuan/ylx/mpiifacegaze_insightface_224
 
 split:
   mode: leave_one_out               # leave_one_out / all_subjects（见下）
@@ -226,20 +233,20 @@ exp/exp01/                        # 有子运行（MPII 的 LOO：一次完整�
 
 ```bash
 # 训练：自动创建 exp/expNN（编号递增），配置快照自动落盘
-python main.py --dataset xgaze --method resnet50
+python main.py --dataset zhang2015-insightface/xgaze --method resnet50
 
 # 训练：显式指定编号（目录已存在则报错拒绝覆盖）
-python main.py --dataset xgaze --method resnet50 --exp exp01
+python main.py --dataset zhang2015-insightface/xgaze --method resnet50 --exp exp01
 
 # 断点续训：只指定实验目录，配置以 exp01 快照为准，从最新 ckpt 完整恢复
 # （model/optim/scheduler/epoch/train_iter），--set 可延长 epochs（快照同步更新）
 python main.py --resume exp01 --set method.train.epochs=40
 
 # 测试：指定实验目录，自动加载其中最新 epoch 的 ckpt
-python main.py --dataset xgaze --method resnet50 --test --exp exp00
+python main.py --dataset zhang2015-insightface/xgaze --method resnet50 --test --exp exp00
 
 # 跨数据集评测：ckpt 取自 exp00，测试集按 --dataset 构建（阶段 5 的评测矩阵即由此实现）
-python main.py --dataset mpiifacegaze --method resnet50 --test --exp exp00
+python main.py --dataset zhang2015-insightface/mpiifacegaze --method resnet50 --test --exp exp00
 ```
 
 要点：
@@ -250,15 +257,15 @@ python main.py --dataset mpiifacegaze --method resnet50 --test --exp exp00
 - 训练时的随机种子、CUDA 设置等在快照 `config.yaml` 中留档，保证可复现
 - `exp/` 整体进 `.gitignore`，不进版本库
 
-## 4. 环境（conda 环境名：opengaze，由你创建）
+## 4. 环境（conda 环境名：opengaze；本机位于 /ssd/conda/envs/yanglinxuan/opengaze）
 
 ```bash
 conda create -n opengaze python=3.12 -y
 conda activate opengaze
 
-# 第一步：PyTorch 2.13.0 + CUDA 12.6（RTX 4060 Ti；系统 CUDA 驱动 12.8 向下兼容 cu126 运行时；
-# cu126 轮子在官方专用索引上，需先单独安装）
-pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cu126
+# 第一步：PyTorch 2.13.0 + CUDA 13.2（本机 4× RTX 4090 24G，训练走 DDP/torchrun；
+# cu132 轮子在官方专用索引上，需先单独安装）
+pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cu132
 
 # 第二步：安装本项目及其余依赖（依赖声明见 pyproject.toml）
 pip install -e .
@@ -269,7 +276,7 @@ pip install -e .
 | 包 | 用途 |
 | --- | --- |
 | python 3.12 | 与 torch 2.13 cp312 轮子配套 |
-| torch 2.13.0 / torchvision 0.28.0 (cu126) | 训练框架、transforms、ResNet 预训练权重；轮子自带 CUDA 运行时与 cuDNN，不依赖系统 CUDA Toolkit |
+| torch 2.13.0 / torchvision 0.28.0 (cu132) | 训练框架、transforms、ResNet 预训练权重；轮子自带 CUDA 运行时与 cuDNN，不依赖系统 CUDA Toolkit |
 | numpy | 数值计算、角度误差 |
 | h5py | 统一 h5 数据格式读写（swmr 懒加载） |
 | pyyaml | yaml 配置解析 |

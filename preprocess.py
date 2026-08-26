@@ -64,7 +64,7 @@ def _load_preprocessor(method, dataset):
 def main():
     parser = argparse.ArgumentParser(description='OpenGaze 数据预处理')
     parser.add_argument('--dataset', required=True,
-                        help='数据集名，对应 configs/preprocess/<name>.yaml，'
+                        help='数据集名，对应 configs/preprocess/<method>/<name>.yaml，'
                              '如 xgaze / mpiifacegaze')
     parser.add_argument('--method', required=True,
                         help='预处理管线名，对应 preprocess/<method>/ 目录，'
@@ -73,7 +73,8 @@ def main():
                         help='覆盖配置项，点路径，如 --set subjects=\'["p00"]\'')
     args = parser.parse_args()
 
-    config_path = os.path.join(PREPROCESS_CONFIG_DIR, f'{args.dataset}.yaml')
+    config_path = os.path.join(PREPROCESS_CONFIG_DIR, args.method,
+                               f'{args.dataset}.yaml')
     if not os.path.exists(config_path):
         raise SystemExit(f'数据集配置不存在: {config_path}')
     config = yaml_to_ns(load_yaml(config_path))

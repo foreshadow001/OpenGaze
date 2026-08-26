@@ -1,0 +1,63 @@
+# EVE 数据集配置（自预处理：zhang2015-insightface 管线，4 相机 5Hz，BGR 存储，lzf 压缩）
+# 官方 test01–06 无 Tobii 标注（且仅 6/10 人）不可用 → 平台 test = 官方 val01–05
+# 划分依据与全部决策见 preprocess/zhang2015-insightface/eve/dataset_report.md（§5/§8）
+# 预处理配置 configs/preprocess/eve.yaml 的 splits 与本文件一致
+name: eve
+data_dir: /media/yanglinxuan/ylx/eve_insightface_224
+
+split:
+  train:
+    sub_folder: train
+    subjects:
+      - train01.h5
+      - train02.h5
+      - train03.h5
+      - train04.h5
+      - train05.h5
+      - train06.h5
+      - train07.h5
+      - train08.h5
+      - train09.h5
+      - train10.h5
+      - train11.h5
+      - train12.h5
+      - train13.h5
+      - train14.h5
+      - train15.h5
+      - train16.h5
+      - train17.h5
+      - train18.h5
+      - train19.h5
+      - train20.h5
+      - train21.h5
+      - train22.h5
+      - train23.h5
+      - train24.h5
+      - train25.h5
+      - train26.h5
+      - train27.h5
+      - train28.h5
+      - train29.h5
+      - train30.h5
+      - train31.h5
+      - train32.h5
+      - train33.h5
+      - train34.h5
+      - train35.h5
+      - train36.h5
+      - train37.h5
+      - train38.h5
+      - train39.h5
+  test:
+    sub_folder: test
+    subjects:
+      - val01.h5
+      - val02.h5
+      - val03.h5
+      - val04.h5
+      - val05.h5
+
+dataloader:
+  num_workers: 5
+  train_sample_size: 0              # 0 = 全量训练
+  test_sample_size: 0

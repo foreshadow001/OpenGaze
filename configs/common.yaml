@@ -1,0 +1,4 @@
+# 平台级公共配置（与「数据集 × 方法」两轴正交，所有入口与脚本共享）
+# 修改即全局生效；一次性覆盖用环境变量 GPUS=0,1 bash xxx.sh（优先级高于本文件）
+gpus: [0, 1, 2, 3]   # 训练/测试用哪些卡：scripts/common.sh 据此 export CUDA_VISIBLE_DEVICES；
+                     # 列表 >1 张卡时训练走 torchrun DDP，1 张卡直接 python；测试始终单卡（列表第一张）

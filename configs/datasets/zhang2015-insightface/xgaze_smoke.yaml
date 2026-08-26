@@ -1,0 +1,20 @@
+# xgaze 冒烟测试配置：验证训练/测试管线
+# 1 个被试抽 10 帧训练，另一被试抽 10 帧测试（快速端到端验证用，不作正式实验）
+# 数据源与正式 xgaze.yaml 一致（insightface 管线，h5 在 data_dir 根目录）
+name: xgaze
+data_dir: /media/yanglinxuan/ylx/xgaze_insightface_224
+
+split:
+  train:
+    sub_folder: ''
+    subjects:
+      - subject0000.h5
+  test:
+    sub_folder: ''
+    subjects:
+      - subject0003.h5
+
+dataloader:
+  num_workers: 2
+  train_sample_size: 10             # 只取 10 帧
+  test_sample_size: 10

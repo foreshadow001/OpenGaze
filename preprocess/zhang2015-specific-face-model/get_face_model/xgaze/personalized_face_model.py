@@ -1,9 +1,9 @@
 """ETH-XGaze 逐被试个性化人脸模型(方案一: 单相机多帧 BA, 逐相机交付)
 
 输入:
-  - insightface 106 关键点 h5(原图像素坐标): /home/hitsz/dataset/xgaze_insightface_224/subject*.h5
+  - insightface 106 关键点 h5(原图像素坐标): /media/yanglinxuan/ylx/xgaze_insightface_224/subject*.h5
   - 相机内参 xml: cam_calibration/cam{cc}.xml
-输出 /home/hitsz/dataset/xgaze_specific_face_model_224/face_models/subject{id:04d}/ 下(txt, np.loadtxt 直接读):
+输出 /ssd/yanglinxuan/xgaze_specific_face_model_224/face_models/subject{id:04d}/ 下(txt, np.loadtxt 直接读):
   - cam{cc}_model6.txt / cam{cc}_model28.txt: 视角正常相机的个性化模型(6 点=IDX6, 28 点=刚性核心)
   - canonical_model28.txt: Kabsch 融合参考模型
   - summary.txt: 相机列表 + 质量诊断
@@ -12,7 +12,7 @@
   - summary_all.csv: 全部被试汇总(subject, n_cams, train/test/通用 中位, 改善倍数, IOD)
   注: 逐帧精化姿态(refined_poses)不在此保存, 归入后续预处理流水线
 用法(在仓库根目录运行):
-  ~/anaconda3/envs/opengaze/bin/python preprocess/zhang2015-specific-face-model/get_face_model/xgaze/personalized_face_model.py -sb 0 -se 120 --overwrite
+  /ssd/conda/envs/yanglinxuan/opengaze/bin/python preprocess/zhang2015-specific-face-model/get_face_model/xgaze/personalized_face_model.py -sb 0 -se 120 --overwrite
 """
 import os
 import sys
@@ -33,9 +33,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(PROJECT_ROOT, '..', '..', '..', 
 from utils.logger import get_logger  # noqa: E402
 
 log = get_logger('preprocess.specific_face_model.xgaze')
-LM_DIR = '/media/hitsz/ylx/xgaze_insightface_224'
-CALIB_DIR = '/media/hitsz/Expansion/xgaze_raw/calibration/cam_calibration'
-OUT_DIR = '/home/hitsz/dataset/xgaze_specific_face_model_224/face_models'
+LM_DIR = '/media/yanglinxuan/ylx/xgaze_insightface_224'
+CALIB_DIR = '/media/yanglinxuan/Expansion/xgaze_raw/calibration/cam_calibration'
+OUT_DIR = '/ssd/yanglinxuan/xgaze_specific_face_model_224/face_models'
 METRICS_DIR = os.path.join(PROJECT_ROOT, 'metrics')   # 建模指标留档(管线目录)
 # 通用 50 点模型（与 zhang2015-insightface 管线共用同一份，内容与官方 face_model.txt 一致）
 FACE_MODEL_FILE = os.path.join(PROJECT_ROOT, '..', '..', '..', 'zhang2015-insightface', 'face_model_xgaze.txt')

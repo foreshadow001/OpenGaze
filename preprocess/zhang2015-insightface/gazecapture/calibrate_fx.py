@@ -27,7 +27,7 @@ LANDMARK_USE = [20, 23, 26, 29, 15, 19]
 IDX6 = [35, 39, 89, 93, 78, 84]
 FACE_MODEL_USE = np.loadtxt(HERE.parent / 'face_model_xgaze.txt').reshape(50, 1, 3)[LANDMARK_USE, :]
 DIST = np.zeros(5)
-DATA = Path('/media/hitsz/zyx/GazeCapture')  # 2026-08 数据由 ylx 迁至 zyx，改指新位置以保持可复现
+DATA = Path('/media/yanglinxuan/zyx/GazeCapture')  # 2026-08 数据迁至 zyx 盘（旧机器）→ 2026-08-25 迁至本机 /media/yanglinxuan/zyx
 
 
 def collect_frames(device, n_sessions, per_session):

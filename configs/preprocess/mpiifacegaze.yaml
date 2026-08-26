@@ -1,9 +1,0 @@
-# MPIIFaceGaze 预处理配置（归一化 -> 每人一个 h5，见 preprocessor/normalize_mpiifacegaze.py）
-name: mpiifacegaze
-raw_data_dir: /media/hitsz/zyx/MPIIFaceGaze               # 原始数据（pXX/dayYY/NNNN.jpg + pXX.txt + Calibration/）
-output_dir: /media/hitsz/ylx/mpiifacegaze_insightface_224 # 输出目录（每人一个 pXX.h5）
-subjects: []          # 空列表 = 全部 15 人；指定则如 ["p00"]
-max_days: 0           # 调试用：只处理每人前 N 天（0 = 全部）
-num_read_workers: 8   # 读图线程数
-providers: [CUDAExecutionProvider, CPUExecutionProvider]  # insightface 推理后端
-landmarks_dir: ""    # 非空 = 从该目录的 landmarks h5 索引遍历并读取已提取特征点（跳过 insightface 检测）

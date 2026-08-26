@@ -1,6 +1,6 @@
 # GazeCapture 官方 train/test 划分（session 级）
 #
-# 来源：iTracker 官方 reference_metadata.mat（/home/hitsz/GazeCapture/pytorch/），
+# 来源：iTracker 官方 reference_metadata.mat（旧机 /home/hitsz/GazeCapture/pytorch/ 提取，官方代码已不在本机），
 #       由其帧级 labelTrain/labelVal/labelTest mask 提取——官方划分完全 session 级一致
 #       （同一 session 的全部帧属于同一 split），已与各 session info.json 的 Dataset
 #       字段交叉验证一致。

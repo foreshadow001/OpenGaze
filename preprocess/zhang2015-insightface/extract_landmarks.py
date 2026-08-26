@@ -4,10 +4,10 @@
 后续重预处理（如 zhang2015-specific-face-model 逐人模型版）从它开始索引遍历，
 跳过 insightface 检测——同帧同特征点，结果逐字节可复现。
 landmarks 属"原始数据侧"的派生索引（与原始帧一一对应），故存放在各原始数据集目录下：
-  xgaze         /media/hitsz/Expansion/xgaze_raw/data/landmarks/
-  mpiifacegaze  /media/hitsz/zyx/MPIIFaceGaze/landmarks/
-  gazecapture   /media/hitsz/zyx/GazeCapture/landmarks/
-  eve           /media/hitsz/zyx/EVE_dataset/eve_dataset/landmarks/
+  xgaze         /media/yanglinxuan/Expansion/xgaze_raw/data/landmarks/
+  mpiifacegaze  /media/yanglinxuan/zyx/MPIIFaceGaze/landmarks/
+  gazecapture   /media/yanglinxuan/zyx/GazeCapture/landmarks/
+  eve           /media/yanglinxuan/zyx/EVE_dataset/eve_dataset/landmarks/
 
 各数据集保留字段（facial_landmarks_2d + 定位原始帧所需的索引）：
   xgaze         frame_index + cam_index          （帧=subjectNNNN/frameNNNN/camNN.JPG）
@@ -17,7 +17,8 @@ landmarks 属"原始数据侧"的派生索引（与原始帧一一对应），�
                                                        帧=<steps[si]>/<cameras[ci]>.mp4 #frame_index）
 face_gaze / face_mat_norm / face_patch 不复制（重预处理时确定性重算）。
 
-用法（仓库根目录，源/目的地均取自 configs/preprocess/<ds>.yaml 的 output_dir / raw_data_dir）：
+用法（仓库根目录，源/目的地均取自 configs/preprocess/<本管线>/<ds>.yaml 的
+output_dir / raw_data_dir）：
   python preprocess/zhang2015-insightface/extract_landmarks.py --dataset eve [--overwrite]
 """
 import argparse
@@ -81,7 +82,10 @@ def main():
     parser.add_argument('--overwrite', action='store_true', help='覆盖已存在的 landmarks h5')
     args = parser.parse_args()
 
-    cfg = load_yaml(str(PROJECT_ROOT / 'configs' / 'preprocess' / f'{args.dataset}.yaml'))
+    # 配置随管线分文件夹：configs/preprocess/<本脚本所在管线>/<dataset>.yaml
+    pipeline = Path(__file__).resolve().parent.name
+    cfg = load_yaml(str(PROJECT_ROOT / 'configs' / 'preprocess' / pipeline
+                        / f'{args.dataset}.yaml'))
     src_root, dst_root = cfg['output_dir'], cfg['raw_data_dir']
     log.info(f'数据集 {args.dataset} | 源 {src_root} | landmarks -> {dst_root}/landmarks')
     extract(args.dataset, src_root, dst_root, overwrite=args.overwrite)

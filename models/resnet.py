@@ -115,8 +115,12 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
+    """ResNet 骨干（自 torchvision 迁移）：只输出池化特征图 (N, feat, 1, 1)，
+    不构建 ImageNet 分类 fc——GazeNet 外接回归头（否则 fc 参数无梯度，
+    DDP 会因 unused parameters 报错，且白占 ckpt/优化器状态）。
+    """
 
-    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
+    def __init__(self, block, layers, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None):
         super(ResNet, self).__init__()
@@ -148,7 +152,6 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
                                        dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -214,6 +217,9 @@ def _resnet(arch, block, layers, pretrained, progress, **kwargs):
     if pretrained:
         state_dict = load_state_dict_from_url(model_urls[arch],
                                               progress=progress)
+        # 预训练权重含 ImageNet fc，本骨干无 fc，剔除后 strict 加载
+        state_dict = {k: v for k, v in state_dict.items()
+                      if not k.startswith('fc.')}
         model.load_state_dict(state_dict)
     return model
 

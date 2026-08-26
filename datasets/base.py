@@ -10,7 +10,7 @@ import random
 
 import h5py
 import numpy as np
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset, DistributedSampler
 from torchvision import transforms
 
 # ImageNet 统计量归一化，与 ETH-XGaze 官方训练管线一致
@@ -28,7 +28,7 @@ class GazeH5Dataset(Dataset):
     """统一 h5 读取（懒加载 + swmr， DataLoader 多 worker 安全）
 
     Args:
-        dataset_path: 数据根目录（如 /media/hitsz/ylx/xgaze_224）
+        dataset_path: 数据根目录（如 /media/yanglinxuan/ylx/xgaze_insightface_224）
         sub_folder:   h5 文件所在子目录（如 train）
         files:        h5 文件名列表
         bgr_to_rgb:   官方 ETH-XGaze h5 为 BGR 存储，需翻转；自行预处理的 RGB 数据传 False
@@ -77,3 +77,12 @@ class GazeH5Dataset(Dataset):
         gaze_label = self.hdf['face_gaze'][idx_in_file, :].astype('float32')
         self.hdf.close()
         return image, gaze_label
+
+
+def make_train_loader(dataset, batch_size, num_workers, distributed=False):
+    """训练 DataLoader 统一构造：DDP 时挂 DistributedSampler（按 epoch 重洗牌）"""
+    if distributed:
+        sampler = DistributedSampler(dataset, shuffle=True)
+        return DataLoader(dataset, batch_size=batch_size,
+                          num_workers=num_workers, sampler=sampler)
+    return DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)

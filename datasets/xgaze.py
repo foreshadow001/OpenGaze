@@ -2,17 +2,17 @@
 
 官方 test 集不公开标注，因此从 80 个被试（官方 train/ 目录）中自行划分：
     train: 75 个被试    test: 5 个被试（subject0106~0111）
-划分文件已并入 configs/datasets/xgaze.yaml 的 split 段。
-数据现为自预处理版（insightface 管线，/home/hitsz/dataset/xgaze_insightface_224，
-h5 在根目录）；其与官方 h5 同为 BGR 存储，加载时统一翻转。
+划分文件已并入 configs/datasets/zhang2015-insightface/xgaze.yaml 的 split 段。
+数据为自预处理版（insightface 管线，ylx 盘 xgaze_insightface_224，h5 在根目录）；
+与官方 h5 同为 BGR 存储，加载时统一翻转（官方预处理版 xgaze_224 仅作参考）。
 """
 from torch.utils.data import DataLoader
 
-from .base import GazeH5Dataset
+from .base import GazeH5Dataset, make_train_loader
 
 
 def get_train_loader(dataset_config, batch_size, num_workers,
-                     sample_size=0, is_shuffle=True):
+                     sample_size=0, is_shuffle=True, distributed=False):
     split = dataset_config.split.train
     train_set = GazeH5Dataset(
         dataset_path=dataset_config.data_dir,
@@ -22,7 +22,7 @@ def get_train_loader(dataset_config, batch_size, num_workers,
         sample_size=sample_size,
         bgr_to_rgb=True,
     )
-    return DataLoader(train_set, batch_size=batch_size, num_workers=num_workers)
+    return make_train_loader(train_set, batch_size, num_workers, distributed)
 
 
 def get_test_loader(dataset_config, batch_size, num_workers, sample_size=0):

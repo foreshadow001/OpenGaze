@@ -1,30 +1,34 @@
 """OpenGaze 入口
 
 训练（自动创建 exp/expNN，配置快照自动落盘）：
-    python main.py --dataset xgaze --method resnet50
+    python main.py --dataset zhang2015-insightface/xgaze --method resnet50
 
 断点续训（只指定实验目录；配置以 exp01 快照为准，从最新 ckpt 完整恢复）：
     python main.py --resume exp01
 
 测试（加载 exp00 中最新 epoch 的 checkpoint）：
-    python main.py --dataset xgaze --method resnet50 --test --exp exp00
+    python main.py --dataset zhang2015-insightface/xgaze --method resnet50 --test --exp exp00
 
 跨数据集评测（ckpt 取自 exp00，测试集按 --dataset 现场构建）：
-    python main.py --dataset mpiifacegaze --method resnet50 --test --exp exp00
+    python main.py --dataset zhang2015-insightface/mpiifacegaze --method resnet50 --test --exp exp00
 
 临时覆盖配置项：
-    python main.py --dataset xgaze --method resnet50 --set method.train.epochs=2
+    python main.py --dataset zhang2015-insightface/xgaze --method resnet50 --set method.train.epochs=2
+
+多卡训练（DDP，脚本内已封装；测试始终单卡）：
+    python -m torch.distributed.run --nproc_per_node=4 main.py --dataset zhang2015-insightface/xgaze --method resnet50
 """
 import argparse
 import os
 
 import numpy as np
 import torch
+import torch.distributed as dist
 
 from datasets import build_test_loader, build_train_loader
 from trainers import Trainer
-from utils.config import (apply_overrides, load_config, load_dataset_config,
-                          load_yaml, yaml_to_ns)
+from utils.config import (PROJECT_ROOT, apply_overrides, load_config,
+                          load_dataset_config, load_yaml, yaml_to_ns)
 from utils.logger import ExperimentLogger, attach_file_handler, find_latest_ckpt, get_logger
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -36,7 +40,8 @@ log = get_logger('main')
 def parse_args():
     parser = argparse.ArgumentParser(description='OpenGaze: 通用视线估计训练/测试平台')
     parser.add_argument('--dataset', default=None,
-                        help='configs/datasets/ 下的配置名，如 xgaze；'
+                        help='configs/datasets/ 下的配置名（可含管线子路径，'
+                             '如 zhang2015-insightface/xgaze）；'
                              '续训时可省略（用实验快照）')
     parser.add_argument('--method', default=None,
                         help='configs/methods/ 下的配置名，如 resnet50；'
@@ -59,6 +64,46 @@ def parse_args():
                         help='覆盖配置项，点路径，如 --set method.train.epochs=2 '
                              'dataset.dataloader.num_workers=2')
     return parser.parse_args()
+
+
+def _init_distributed():
+    """torchrun 多卡训练时初始化分布式进程组（WORLD_SIZE>1）；单进程返回 (False, None)
+
+    多卡启动方式（脚本内已封装，见 scripts/common.sh 的 py()）：
+        python -m torch.distributed.run --nproc_per_node=4 main.py --dataset ... --method ...
+    返回 (distributed, device)：device 为本进程专属卡 cuda:local_rank。
+    """
+    world_size = int(os.environ.get('WORLD_SIZE', '1'))
+    if world_size <= 1:
+        return False, None
+    if not torch.cuda.is_available():
+        raise SystemExit('torchrun 多卡训练需要 CUDA（未检测到可用 GPU）')
+    local_rank = int(os.environ.get('LOCAL_RANK', '0'))
+    torch.cuda.set_device(local_rank)
+    dist.init_process_group(backend='nccl')
+    return True, torch.device(f'cuda:{local_rank}')
+
+
+def _apply_common_env():
+    """平台公共配置 configs/common.yaml → 环境变量。
+
+    gpus → CUDA_VISIBLE_DEVICES：仅当环境未显式设置时（scripts/common.sh 的
+    py() 启动器/手动 torchrun 已设则尊重之）。必须在任何 CUDA 初始化之前调用。
+    """
+    if os.environ.get('CUDA_VISIBLE_DEVICES'):
+        return
+    path = os.path.join(PROJECT_ROOT, 'configs', 'common.yaml')
+    if not os.path.exists(path):
+        return
+    gpus = load_yaml(path).get('gpus')
+    if gpus:
+        os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(g) for g in gpus)
+        # 此时尚无任何 handler（ExperimentLogger/attach_file_handler 都在其后），
+        # 先确保根 logger 挂上 console，否则本条 INFO 会被静默丢弃
+        from utils.logger import _ensure_root_logger
+        _ensure_root_logger()
+        log.info(f'configs/common.yaml: CUDA_VISIBLE_DEVICES='
+                 f'{os.environ["CUDA_VISIBLE_DEVICES"]}')
 
 
 def set_seed(seed, use_gpu):
@@ -89,6 +134,9 @@ def _check_snapshot_consistency(snapshot, args):
 
 
 def run_train(args):
+    distributed, device = _init_distributed()
+    is_main = not distributed or dist.get_rank() == 0
+
     if not args.resume:
         if not args.dataset or not args.method:
             raise SystemExit('新训练必须指定 --dataset 与 --method '
@@ -108,33 +156,46 @@ def run_train(args):
         # --set 覆盖快照配置（如延长 epochs），并更新快照留档
         if args.set:
             apply_overrides(config, args.set)
-            log.info(f'续训配置覆盖: {args.set}')
+            if is_main:
+                log.info(f'续训配置覆盖: {args.set}')
 
-        logger = ExperimentLogger(EXP_ROOT, args.resume, args.run, mode='append')
-        if args.set:
-            logger.save_config(config)  # 更新 run 级快照
+        # 实验目录/快照/run.log 仅主进程写；其余进程不挂 ExperimentLogger
+        logger = None
+        if is_main:
+            logger = ExperimentLogger(EXP_ROOT, args.resume, args.run, mode='append')
+            if args.set:
+                logger.save_config(config)  # 更新 run 级快照
         ckpt_path = find_latest_ckpt(exp_dir, args.run)
         set_seed(config.method.output.seed, config.method.output.use_gpu)
 
         train_loader = build_train_loader(config)
-        trainer = Trainer(config, logger)
+        trainer = Trainer(config, logger, device=device)
         trainer.load_checkpoint(ckpt_path, resume=True)
         trainer.train(train_loader)
+        if distributed:
+            dist.destroy_process_group()
         return
 
     # ------------------------------------------------------------ 新训练
     config, _, method_yaml_path = load_config(args.dataset, args.method, args.set)
 
-    logger = ExperimentLogger(EXP_ROOT, args.exp, args.run, mode='create')
-    # 快照总是写 run 级（子运行如 LOO 各折的 fold 划分各自留档）；
-    # 实验首次创建时另复制一份到顶层供 require_exp 匹配
-    logger.save_config(config, method_yaml_path)
+    # 实验目录/快照/run.log 仅主进程写；其余进程不挂 ExperimentLogger
+    logger = None
+    if is_main:
+        logger = ExperimentLogger(EXP_ROOT, args.exp, args.run, mode='create')
+        # 快照总是写 run 级（子运行如 LOO 各折的 fold 划分各自留档）；
+        # 实验首次创建时另复制一份到顶层供 require_exp 匹配
+        logger.save_config(config, method_yaml_path)
+    if distributed:
+        dist.barrier()  # 等主进程建好实验目录再开跑
 
     set_seed(config.method.output.seed, config.method.output.use_gpu)
 
     train_loader = build_train_loader(config)
-    trainer = Trainer(config, logger)
+    trainer = Trainer(config, logger, device=device)
     trainer.train(train_loader)
+    if distributed:
+        dist.destroy_process_group()
 
 
 def run_test(args):
@@ -189,6 +250,7 @@ def run_test(args):
 
 
 if __name__ == '__main__':
+    _apply_common_env()
     args = parse_args()
     if args.resume and args.test:
         raise SystemExit('--resume 与 --test 不能同时使用')

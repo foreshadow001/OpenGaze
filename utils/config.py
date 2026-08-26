@@ -1,7 +1,7 @@
 """yaml 配置加载与合并
 
 配置沿「数据集 × 方法」两个正交轴组织：
-    configs/datasets/<name>.yaml   数据位置、划分方式、加载参数
+    configs/datasets/<pipeline>/<name>.yaml   数据位置、划分方式、加载参数（按预处理管线分文件夹）
     configs/methods/<name>.yaml    模型结构 + 训练策略
 运行时合并为一个 namespace 配置，支持 --set key=value 点路径覆盖。
 """
@@ -77,6 +77,10 @@ def set_by_path(config, path, value):
 def load_config(dataset_name, method_name, overrides=None, config_root=CONFIG_ROOT):
     """加载并合并数据集与方法配置。
 
+    dataset_name 支持子路径（配置按预处理管线分文件夹，如
+    'zhang2015-insightface/xgaze' 对应 configs/datasets/zhang2015-insightface/xgaze.yaml）；
+    配置内 name: 字段（loader 注册名）不含管线前缀。
+
     Returns:
         (config, dataset_yaml_path, method_yaml_path)
     """
@@ -96,13 +100,15 @@ def load_config(dataset_name, method_name, overrides=None, config_root=CONFIG_RO
         'method': load_yaml(method_path),
     }
     config = yaml_to_ns(merged)
-    apply_overrides(config, overrides)
+    if overrides:
+        apply_overrides(config, overrides)
 
     return config, dataset_path, method_path
 
 
 def load_dataset_config(dataset_name, config_root=CONFIG_ROOT):
-    """单独加载数据集配置（跨数据集测试时替换 dataset 段用）"""
+    """单独加载数据集配置（跨数据集测试时替换 dataset 段用）；
+    dataset_name 同样支持 '管线/数据集' 子路径"""
     path = os.path.join(config_root, 'datasets', f'{dataset_name}.yaml')
     if not os.path.exists(path):
         raise FileNotFoundError(f'数据集配置不存在: {path}')

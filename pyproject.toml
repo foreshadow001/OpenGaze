@@ -9,8 +9,8 @@ description = "Unified training and evaluation platform for gaze estimation (ETH
 readme = "README.md"
 requires-python = ">=3.12"
 
-# torch/torchvision 使用 CUDA 12.6 轮子，需先从 PyTorch 官方索引安装（见 STRUCTURE.md 第 4 节）：
-#   pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cu126
+# torch/torchvision 使用 CUDA 13.2 轮子，需先从 PyTorch 官方索引安装（见 STRUCTURE.md 第 4 节）：
+#   pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cu132
 # 之后再执行 pip install -e .
 dependencies = [
     "torch==2.13.0",
@@ -23,9 +23,9 @@ dependencies = [
     "opencv-python",
     "scipy",
     "matplotlib",
-    # 预处理（见 preprocessor/）；onnxruntime-gpu 1.22.x 对应 CUDA 12，1.23+ 需 CUDA 13
-    "insightface==0.7.3",
-    "onnxruntime-gpu==1.22.0",
+    # 预处理（见 preprocess/）；onnxruntime-gpu 1.23+ 对应 CUDA 13（勿装 CPU 版 onnxruntime）
+    "insightface==1.0.1",
+    "onnxruntime-gpu==1.29.0",
 ]
 
 [tool.setuptools]
