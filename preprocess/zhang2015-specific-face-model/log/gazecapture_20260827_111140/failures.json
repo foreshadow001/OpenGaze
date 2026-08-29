@@ -1,0 +1,13 @@
+{
+  "total_failed": 1,
+  "by_reason": {
+    "fallback_generic": 1
+  },
+  "samples": [
+    {
+      "subject": "00028",
+      "sample": "ori3",
+      "reason": "fallback_generic"
+    }
+  ]
+}

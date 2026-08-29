@@ -57,6 +57,11 @@ split:
       - val04.h5
       - val05.h5
 
+# epoch 协议（跟随数据集，见 CLAUDE.md 约定 8）：两 backbone 均在 10ep 最佳
+# （3.12/3.08°），之后跨被试泛化过拟合（25ep 差 ~0.3°）
+train:
+  epochs: 10
+
 dataloader:
   num_workers: 5
   train_sample_size: 0              # 0 = 全量训练

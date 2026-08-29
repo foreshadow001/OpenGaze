@@ -17,9 +17,13 @@ def estimateHeadPose(landmarks, face_model, camera, distortion, iterate=True):
     return rvec, tvec
 
 
-def normalizeData_face(img, face_model, rvec, tvec, gaze_point, camera_matrix, landmarks=None):
-    """完整图像归一化流程: 把人脸对齐到虚拟相机, 输出归一化图像/头部姿态/视线方向.
+def normalizeData_face(img, face_model, rvec, tvec, gaze_point, camera_matrix,
+                       landmarks=None, fixed_forward=False):
+    """完整图像预处理流程: 把人脸对齐到虚拟相机, 输出归一化图像/头部姿态/视线方向.
 
+    fixed_forward=False: forward 指向人脸中心(官方归一化);
+    fixed_forward=True : forward 固定为 [0,0,1](虚拟相机光轴=原相机 z 轴),
+                         并平移主点加偏移量, 使人脸中心始终落在归一化图像中心.
     返回 [img_warped, hr_norm, gc_normalized, (landmarks_warped)].
     """
     focal_norm = 960          # 虚拟相机焦距
@@ -50,14 +54,25 @@ def normalizeData_face(img, face_model, rvec, tvec, gaze_point, camera_matrix, l
         [0.0, 0.0, z_scale],
     ])
 
-    # 构建归一化旋转: forward 指向人脸中心, down 由 hRx 确定
+    # 构建归一化旋转: down 由 hRx 确定
     hRx = hR[:, 0]
-    forward = (face_center / distance).reshape(3)
+    if fixed_forward:
+        forward = np.array([0.0, 0.0, 1.0])   # 虚拟相机光轴 = 原相机 z 轴
+    else:
+        forward = (face_center / distance).reshape(3)  # 指向人脸中心
     down = np.cross(forward, hRx)
     down /= np.linalg.norm(down)
     right = np.cross(down, forward)
     right /= np.linalg.norm(right)
     R = np.c_[right, down, forward].T
+
+    if fixed_forward:
+        # 人脸中心不再位于光轴上, 平移主点(加偏移量)使其投影落在图像中心
+        fc_n = np.dot(R, face_center).ravel()
+        u_c = focal_norm * fc_n[0] / (z_scale * fc_n[2]) + roiSize[0] / 2
+        v_c = focal_norm * fc_n[1] / (z_scale * fc_n[2]) + roiSize[1] / 2
+        cam_norm[0, 2] += roiSize[0] / 2 - u_c
+        cam_norm[1, 2] += roiSize[1] / 2 - v_c
 
     W = np.dot(np.dot(cam_norm, S), np.dot(R, np.linalg.inv(camera_matrix)))
 

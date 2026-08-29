@@ -1,0 +1,266 @@
+{
+  "note": "official rvec/tvec driven normalization (demo only, label convention unchanged); head/gaze_HEAD annotated for both our-PnP and official poses",
+  "summary": "pose gap (PnP vs official): median 20.5 deg, min 8.3, max 55.6  [n=10]",
+  "samples": [
+    {
+      "subject": 72,
+      "frame": 561,
+      "cam": 16,
+      "head_pnp_pitch_yaw_deg": [
+        18.45,
+        2.16
+      ],
+      "head_official_pitch_yaw_deg": [
+        -26.83,
+        32.74
+      ],
+      "pose_gap_deg": 54.19,
+      "gaze_cam_pitch_yaw_deg": [
+        -46.56,
+        38.59
+      ],
+      "gaze_head_pnp_pitch_yaw_deg": [
+        -66.71,
+        22.43
+      ],
+      "gaze_head_official_pitch_yaw_deg": [
+        -20.03,
+        -3.16
+      ]
+    },
+    {
+      "subject": 35,
+      "frame": 411,
+      "cam": 2,
+      "head_pnp_pitch_yaw_deg": [
+        27.42,
+        -18.56
+      ],
+      "head_official_pitch_yaw_deg": [
+        10.19,
+        -30.3
+      ],
+      "pose_gap_deg": 20.5,
+      "gaze_cam_pitch_yaw_deg": [
+        6.48,
+        -0.76
+      ],
+      "gaze_head_pnp_pitch_yaw_deg": [
+        -17.08,
+        21.98
+      ],
+      "gaze_head_official_pitch_yaw_deg": [
+        0.69,
+        29.44
+      ]
+    },
+    {
+      "subject": 73,
+      "frame": 552,
+      "cam": 0,
+      "head_pnp_pitch_yaw_deg": [
+        39.94,
+        5.97
+      ],
+      "head_official_pitch_yaw_deg": [
+        20.79,
+        0.49
+      ],
+      "pose_gap_deg": 19.76,
+      "gaze_cam_pitch_yaw_deg": [
+        -17.87,
+        -20.8
+      ],
+      "gaze_head_pnp_pitch_yaw_deg": [
+        -55.2,
+        -38.85
+      ],
+      "gaze_head_official_pitch_yaw_deg": [
+        -37.56,
+        -24.71
+      ]
+    },
+    {
+      "subject": 40,
+      "frame": 422,
+      "cam": 1,
+      "head_pnp_pitch_yaw_deg": [
+        24.25,
+        -6.76
+      ],
+      "head_official_pitch_yaw_deg": [
+        16.48,
+        -8.71
+      ],
+      "pose_gap_deg": 8.33,
+      "gaze_cam_pitch_yaw_deg": [
+        -9.78,
+        -14.6
+      ],
+      "gaze_head_pnp_pitch_yaw_deg": [
+        -33.05,
+        -4.6
+      ],
+      "gaze_head_official_pitch_yaw_deg": [
+        -26.24,
+        -6.14
+      ]
+    },
+    {
+      "subject": 41,
+      "frame": 418,
+      "cam": 7,
+      "head_pnp_pitch_yaw_deg": [
+        29.39,
+        18.99
+      ],
+      "head_official_pitch_yaw_deg": [
+        7.24,
+        27.48
+      ],
+      "pose_gap_deg": 24.15,
+      "gaze_cam_pitch_yaw_deg": [
+        -12.98,
+        45.6
+      ],
+      "gaze_head_pnp_pitch_yaw_deg": [
+        -40.43,
+        31.03
+      ],
+      "gaze_head_official_pitch_yaw_deg": [
+        -21.77,
+        16.5
+      ]
+    },
+    {
+      "subject": 92,
+      "frame": 361,
+      "cam": 8,
+      "head_pnp_pitch_yaw_deg": [
+        3.65,
+        10.21
+      ],
+      "head_official_pitch_yaw_deg": [
+        -16.14,
+        6.15
+      ],
+      "pose_gap_deg": 20.42,
+      "gaze_cam_pitch_yaw_deg": [
+        -32.32,
+        20.35
+      ],
+      "gaze_head_pnp_pitch_yaw_deg": [
+        -33.15,
+        10.58
+      ],
+      "gaze_head_official_pitch_yaw_deg": [
+        -16.63,
+        12.47
+      ]
+    },
+    {
+      "subject": 28,
+      "frame": 267,
+      "cam": 10,
+      "head_pnp_pitch_yaw_deg": [
+        -8.53,
+        -27.95
+      ],
+      "head_official_pitch_yaw_deg": [
+        -21.38,
+        -36.66
+      ],
+      "pose_gap_deg": 15.37,
+      "gaze_cam_pitch_yaw_deg": [
+        -48.11,
+        -2.86
+      ],
+      "gaze_head_pnp_pitch_yaw_deg": [
+        -26.82,
+        31.58
+      ],
+      "gaze_head_official_pitch_yaw_deg": [
+        -20.92,
+        32.47
+      ]
+    },
+    {
+      "subject": 38,
+      "frame": 326,
+      "cam": 9,
+      "head_pnp_pitch_yaw_deg": [
+        22.99,
+        1.76
+      ],
+      "head_official_pitch_yaw_deg": [
+        -32.53,
+        -1.48
+      ],
+      "pose_gap_deg": 55.64,
+      "gaze_cam_pitch_yaw_deg": [
+        -46.46,
+        22.93
+      ],
+      "gaze_head_pnp_pitch_yaw_deg": [
+        -68.08,
+        46.74
+      ],
+      "gaze_head_official_pitch_yaw_deg": [
+        -16.3,
+        16.83
+      ]
+    },
+    {
+      "subject": 50,
+      "frame": 451,
+      "cam": 2,
+      "head_pnp_pitch_yaw_deg": [
+        7.89,
+        -19.7
+      ],
+      "head_official_pitch_yaw_deg": [
+        -3.5,
+        -32.79
+      ],
+      "pose_gap_deg": 17.37,
+      "gaze_cam_pitch_yaw_deg": [
+        9.4,
+        -37.44
+      ],
+      "gaze_head_pnp_pitch_yaw_deg": [
+        -0.02,
+        -11.17
+      ],
+      "gaze_head_official_pitch_yaw_deg": [
+        12.45,
+        -5.79
+      ]
+    },
+    {
+      "subject": 31,
+      "frame": 195,
+      "cam": 8,
+      "head_pnp_pitch_yaw_deg": [
+        20.02,
+        10.68
+      ],
+      "head_official_pitch_yaw_deg": [
+        -14.56,
+        8.55
+      ],
+      "pose_gap_deg": 34.97,
+      "gaze_cam_pitch_yaw_deg": [
+        -51.11,
+        -17.27
+      ],
+      "gaze_head_pnp_pitch_yaw_deg": [
+        -69.62,
+        -42.4
+      ],
+      "gaze_head_official_pitch_yaw_deg": [
+        -37.16,
+        -21.27
+      ]
+    }
+  ]
+}

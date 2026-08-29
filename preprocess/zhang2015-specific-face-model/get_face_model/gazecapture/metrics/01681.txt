@@ -2,4 +2,4 @@
 # group  n_train_kept  train_rms_px  test_rms_px  test_rms_generic_px  iod_mm
 ori1  10  0.29  0.60  2.01  90.0
 ori3  10  0.37  0.64  2.23  89.7
-ori4  10  0.63  1.05  2.43  89.7
+ori4  10  0.60  1.05  2.98  89.7

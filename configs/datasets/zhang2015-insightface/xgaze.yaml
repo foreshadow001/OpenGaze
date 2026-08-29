@@ -94,6 +94,11 @@ split:
       - subject0109.h5
       - subject0111.h5
 
+# epoch 协议（跟随数据集，见 CLAUDE.md 约定 8；exp/exp_epoch/summary.md 2026-08-27 研究）：
+# r50/r18 四档持平（4.74~4.80），15ep 省时且在噪声内
+train:
+  epochs: 15
+
 dataloader:
   num_workers: 5
   train_sample_size: 0              # 0 = 全量训练

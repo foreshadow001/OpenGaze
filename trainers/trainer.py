@@ -42,7 +42,19 @@ class Trainer:
         train_cfg = config.method.train
         output_cfg = config.method.output
         self.batch_size = train_cfg.batch_size
-        self.epochs = train_cfg.epochs
+        # epoch 数跟随数据集配置（CLAUDE.md 约定 8）：dataset.train.epochs 优先
+        # （可用 epochs_by_method 按方法细分，如 MPII resnet18=25），
+        # 缺省回落 method.train.epochs（默认 25，作通用上限）
+        epochs = None
+        ds_train = getattr(config.dataset, 'train', None)
+        if ds_train is not None:
+            by_method = getattr(ds_train, 'epochs_by_method', None)
+            if by_method is not None:
+                epochs = getattr(by_method, config.method.name, None)
+            epochs = epochs or getattr(ds_train, 'epochs', None)
+        if epochs is None:
+            epochs = train_cfg.epochs
+        self.epochs = int(epochs)
         # 每 N 个 epoch 保存一次 checkpoint（节约空间；最后一个 epoch 始终保存，
         # 保证训练完成必有最终 ckpt，且 resume / --test 取最新的语义不变）
         self.ckpt_save_interval = getattr(train_cfg, 'ckpt_save_interval', 5)

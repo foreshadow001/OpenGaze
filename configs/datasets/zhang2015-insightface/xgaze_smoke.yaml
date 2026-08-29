@@ -14,6 +14,9 @@ split:
     subjects:
       - subject0003.h5
 
+train:
+  epochs: 2                        # 冒烟自含 2ep（免 --set）
+
 dataloader:
   num_workers: 2
   train_sample_size: 10             # 只取 10 帧

@@ -1,0 +1,16 @@
+# zhang2015-specific-face-model 版 GazeCapture 归一化配置（协议见 preprocess/zhang2015-specific-face-model/normalization_protocol.md）
+# 与 zhang2015-insightface 版同构；差异：
+#   - session 范围 = configs/splits/gazecapture_sfm.yaml（FAZE 筛选 ∩ 建模成功，2026-08-27 定稿：
+#     建模失败的 session 不预处理、不训练、不测试）
+#   - 逐 session×朝向个性化模型（ori{o}_model6），缺失朝向回退通用
+name: gazecapture
+raw_data_dir: /media/yanglinxuan/zyx/GazeCapture
+output_dir: /media/yanglinxuan/sfm/gazecapture_specific_224     # 输出（按 split 分目录，lzf）
+face_model_root: /media/yanglinxuan/ylx/gazecapture_specific_face_model/face_models
+split_file: configs/splits/gazecapture_sfm.yaml                 # FAZE ∩ 建模成功：train 1055 / test 122
+calibration_dir: /media/yanglinxuan/zyx/GazeCapture/calibration # 内参 xml（15 设备×双分辨率）
+landmarks_dir: /media/yanglinxuan/zyx/GazeCapture/landmarks     # 必填：landmarks 索引（按 split 分目录）
+sessions: []          # 空列表 = split_file 中全部 session
+splits: [train, test] # 处理哪些 split（输出按 split 分目录）
+max_frames: 0         # 调试用：每 session 只处理前 N 帧（0 = 全部）
+num_read_workers: 8   # 读图线程数

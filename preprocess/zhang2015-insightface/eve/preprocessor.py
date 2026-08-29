@@ -77,6 +77,11 @@ class EVEPreprocessor:
         self.intervals = {c: round(FPS[c] / config.target_hz) for c in self.cameras}
 
     # ------------------------------------------------------------ 单 step×cam
+    def _model_for(self, subject, cam_index):
+        """逐 (被试, 相机) 的 PnP/归一化模型。基类：通用模型（zhang2015-insightface
+        语义）；zhang2015-specific-face-model 管线覆写注入 cam{cc}_model6（缺失回退通用）。"""
+        return self.face_model_use
+
     def _plan(self, step_dir, cam, recorder, rec_subject, cand_override=None):
         """读取一步一相机的标定与标签，确定候选帧。
 
@@ -249,12 +254,13 @@ class EVEPreprocessor:
                             continue
                         lm106 = faces[0].landmark_2d_106
                     pts2d = lm106[IDX6].reshape(6, 1, 2).astype(float)
+                    model = self._model_for(subject, ci)
                     rvec, tvec = estimateHeadPose(
-                        pts2d, self.face_model_use, plan['K'], DIST)
+                        pts2d, model, plan['K'], DIST)
                     gaze_point = _screen_px_to_cam_mm(
                         plan['pog'][i], plan['T'], plan['mmp'])
                     img_warped, hr_norm, gc_normalized = normalizeData_face(
-                        img, self.face_model_use, rvec, tvec, gaze_point,
+                        img, model, rvec, tvec, gaze_point,
                         plan['K'])[:3]
                     R = cv2.Rodrigues(hr_norm)[0] @ cv2.Rodrigues(rvec)[0].T
                     g_theta, g_phi = vector_to_angles(gc_normalized.flatten())

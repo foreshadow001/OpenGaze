@@ -1,0 +1,10 @@
+# zhang2015-specific-face-model 版 MPIIFaceGaze 归一化配置（协议见 preprocess/zhang2015-specific-face-model/normalization_protocol.md）
+# 与 zhang2015-insightface 版同构；差异：仅 landmarks 模式（必填）、逐人 cam00 个性化模型、输出 2TB 固态
+name: mpiifacegaze
+raw_data_dir: /media/yanglinxuan/zyx/MPIIFaceGaze               # 原始数据（读图 + Camera.mat）
+output_dir: /media/yanglinxuan/sfm/mpiifacegaze_specific_224    # 输出（每人一个 pXX.h5，lzf）
+face_model_root: /media/yanglinxuan/ylx/mpiifacegaze_specific_face_model/face_models
+landmarks_dir: /media/yanglinxuan/zyx/MPIIFaceGaze/landmarks    # 必填：landmarks 索引
+subjects: []          # 空列表 = 全部 15 人；指定则如 ["p00"]
+max_days: 0           # 调试用：只处理每人前 N 天（0 = 全部）
+num_read_workers: 8   # 读图线程数

@@ -47,8 +47,8 @@ METRICS_DIR = os.path.join(PROJECT_ROOT, 'metrics')
 FACE_MODEL_FILE = os.path.join(PROJECT_ROOT, '..', '..', '..',
                                'zhang2015-insightface', 'face_model_xgaze.txt')
 GEN_ROWS = [20, 23, 26, 29, 15, 19]
-# 朝向 -> (w, h)：竖屏 app 旋转帧 480x640；横屏传感器原生帧 640x480
-# （与 zhang2015-insightface/gazecapture 预处理的逐帧内参查表规则一致）
+# ⚠️ 已弃用（2026-08-27）：个别设备/朝向的实际帧尺寸与此直觉相反（iPad Air 2
+# 的 ori4 实为 480x640），内参查找一律按实际帧尺寸读 1 帧确定，勿再使用本表
 ORI_SIZE = {1: (480, 640), 2: (480, 640), 3: (640, 480), 4: (640, 480)}
 
 N_TRAIN, N_TEST = 60, 60     # 每 session 采样帧数: 120 帧均匀采样, 奇偶分 train/test
@@ -93,6 +93,7 @@ def process_session(split, session, gen6, calib_cache, max_angle=core.CAM_ANGLE_
 
     with h5py.File(lm_path, 'r') as f:
         ori_all = f['orientation'][:].ravel()
+        fr_all = f['frame_index'][:].ravel()
         lm_all = f['facial_landmarks_2d'][:]
     n_rows = len(lm_all)
     if n_rows < 20:
@@ -104,11 +105,19 @@ def process_session(split, session, gen6, calib_cache, max_angle=core.CAM_ANGLE_
     sel = np.linspace(0, n_rows - 1, n_sample).astype(int)
     train_rows, test_rows = sorted(sel[0::2].tolist()), sorted(sel[1::2].tolist())
 
-    # 按朝向组建模观测（每朝向一套内参，与该朝向帧的像素坐标一致）
+    # 按朝向组建模观测。内参按该朝向【实际帧尺寸】查（读 1 帧定 w/h）——
+    # app 存储帧 = 界面视角，个别设备/朝向的宽高与 ORI_SIZE 直觉相反
+    # （如 iPad Air 2 的 ori4 实为 480x640），用错 K 会让 PnP 角度到 ~180°（垃圾）
     groups = {}
     for o in sorted(set(ori_all.tolist())):
-        w, h = ORI_SIZE[int(o)]
-        K, dist = _load_calib(device, w, h, calib_cache)
+        rows_o = [r for r in range(len(ori_all)) if int(ori_all[r]) == int(o)]
+        img0 = cv2.imread(str(Path(RAW_DIR) / session / 'frames' /
+                              '{:05d}.jpg'.format(int(fr_all[rows_o[0]]))))
+        if img0 is None:
+            log.warning('  ori{} 首帧读取失败, 跳过该朝向'.format(o))
+            continue
+        h_px, w_px = img0.shape[:2]
+        K, dist = _load_calib(device, w_px, h_px, calib_cache)
         views = {}
         for tag, rows in (('train', train_rows), ('test', test_rows)):
             vs, angles = [], []

@@ -29,6 +29,13 @@ split:
       - p13.h5
       - p14.h5
 
+# epoch 协议（跟随数据集，见 CLAUDE.md 约定 8）：r50 15-25ep 持平取 20；
+# r18 到 25ep 仍在缓降（5.29→5.12），按方法细分
+train:
+  epochs: 20
+  epochs_by_method:
+    resnet18: 25
+
 dataloader:
   num_workers: 5
   train_sample_size: 0              # 0 = 全量训练

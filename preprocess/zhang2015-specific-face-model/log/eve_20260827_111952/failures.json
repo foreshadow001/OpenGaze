@@ -1,0 +1,43 @@
+{
+  "total_failed": 7,
+  "by_reason": {
+    "fallback_generic": 7
+  },
+  "samples": [
+    {
+      "subject": "train02",
+      "sample": "cam00",
+      "reason": "fallback_generic"
+    },
+    {
+      "subject": "train04",
+      "sample": "cam00",
+      "reason": "fallback_generic"
+    },
+    {
+      "subject": "train14",
+      "sample": "cam00",
+      "reason": "fallback_generic"
+    },
+    {
+      "subject": "train22",
+      "sample": "cam00",
+      "reason": "fallback_generic"
+    },
+    {
+      "subject": "train23",
+      "sample": "cam00",
+      "reason": "fallback_generic"
+    },
+    {
+      "subject": "val01",
+      "sample": "cam00",
+      "reason": "fallback_generic"
+    },
+    {
+      "subject": "val03",
+      "sample": "cam00",
+      "reason": "fallback_generic"
+    }
+  ]
+}

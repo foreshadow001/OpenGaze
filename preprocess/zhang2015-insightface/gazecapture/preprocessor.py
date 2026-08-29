@@ -73,10 +73,20 @@ def _dot_to_ccs_mm(ori, xcam, ycam):
 
 def _gaze_point_cam(ori, ccs_x, ccs_y):
     """CCS (mm) → 相机系 gaze 点 (mm)，与该帧 PnP 同一坐标系（见模块 docstring）"""
-    if ori in (1, 2):                       # 竖屏帧（app 旋转后，世界轴系）
-        return (-ccs_x, ccs_y, 0.0)
-    s = LANDSCAPE_SIGN                      # 横屏帧（传感器原生直出）
-    return (s * ccs_y, s * ccs_x, 0.0)
+    if ori in (1, 2):                       # 竖屏帧
+        # CCS +x（设备物理左）= 相机 +x（图像右 = 人物左），非镜像前摄
+        # 2026-08-28 修正：原为 (-ccs_x, ...) 方向反了（导致全量 yaw 取反）
+        p = (ccs_x, ccs_y, 0.0)
+    else:                                   # 横屏帧
+        s = LANDSCAPE_SIGN
+        # 同理修正 x 方向：CCS +y（沿设备长边）→ 相机 x 需翻转
+        p = (-s * ccs_y, s * ccs_x, 0.0)
+    if ori in (2, 4):
+        # ori2/ori4 的存储帧（及其上的特征点/PnP）相对 ori1/ori3 旋转了 180°，
+        # 位姿的 roll 在归一化中自自洽，但注视点必须转到同一旋转后的相机轴系
+        # （2026-08-27 修复：此前漏掉，导致这两类帧 pitch/yaw 双取反，~36% 标签错号）
+        p = (-p[0], -p[1], 0.0)
+    return p
 
 
 def _slugify(device_name):
@@ -113,6 +123,11 @@ class GazeCapturePreprocessor:
         self.session_filter = set(config.sessions) if config.sessions else None
 
     # ------------------------------------------------------------- 内参
+    def _model_for(self, session, ori):
+        """逐 (session, 朝向) 的 PnP/归一化模型。基类：通用模型（zhang2015-insightface
+        语义）；zhang2015-specific-face-model 管线覆写注入 ori{o}_model6（缺失回退通用）。"""
+        return self.face_model_use
+
     def _load_calib(self, device, w, h):
         key = (device, w, h)
         if key not in self._calib:
@@ -243,11 +258,12 @@ class GazeCapturePreprocessor:
 
                 h, w = img.shape[:2]
                 K, dist = self._load_calib(device, w, h)
+                model = self._model_for(session, ori)
                 pts2d = lm106[IDX6].reshape(6, 1, 2).astype(float)
-                rvec, tvec = estimateHeadPose(pts2d, self.face_model_use, K, dist)
+                rvec, tvec = estimateHeadPose(pts2d, model, K, dist)
                 gaze_point = _gaze_point_cam(ori, ccs_x, ccs_y)
                 img_warped, hr_norm, gc_normalized = normalizeData_face(
-                    img, self.face_model_use, rvec, tvec, np.array(gaze_point),
+                    img, model, rvec, tvec, np.array(gaze_point),
                     K)[:3]
                 R = cv2.Rodrigues(hr_norm)[0] @ cv2.Rodrigues(rvec)[0].T
                 g_theta, g_phi = vector_to_angles(gc_normalized.flatten())

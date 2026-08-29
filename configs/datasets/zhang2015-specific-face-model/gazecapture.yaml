@@ -1,0 +1,31 @@
+# GazeCapture 第二版（zhang2015-specific-face-model 管线，sfm 盘，逐朝向个性化模型归一化）
+# 训练协议 session 列表 = gazecapture_sfm.yaml（FAZE ∩ 建模成功 1177）
+# 训练/测试协议参考 FAZE（ICCV19）的被试级筛选（无 few-shot、用全帧；2026-08-26 定稿）：
+#   train: 官方 train 1321 session 中样本数 ≥500 → 1069 session，1,942,187 帧（低于 500 不参与训练）
+#   test : 官方 test 150 session 中样本数 ≥1000 → 123 session，259,776 帧（低于 1000 不参与测试；
+#          FAZE 只取每人最后 500 帧做评测；本平台无校准环节，直接用该被试全部帧）
+# 筛选后的 session 列表在 configs/splits/gazecapture_sfm.yaml（按预处理产物帧数生成，
+# 见其头注释）；官方全量划分 gazecapture_sessions.yaml 仅供预处理使用。
+# ===== 第二版（specific-face-model）对照配置：数据来自 sfm 盘 /media/yanglinxuan/sfm/gazecapture_specific_224 =====
+name: gazecapture
+data_dir: /media/yanglinxuan/sfm/gazecapture_specific_224
+
+split:
+  train:
+    sub_folder: train
+    split_file: configs/splits/gazecapture_sfm.yaml   # FAZE 式筛选后的 session 列表
+    split_key: train
+  test:
+    sub_folder: test
+    split_file: configs/splits/gazecapture_sfm.yaml
+    split_key: test
+
+# epoch 协议（跟随数据集，见 CLAUDE.md 约定 8；2026-08-28 修订 15→10）：
+# 干净标签完整曲线 r50 5/10/15ep = 3.74/3.63/4.01（10ep 后跨 session 过拟合，与 EVE 同型）
+train:
+  epochs: 10
+
+dataloader:
+  num_workers: 5
+  train_sample_size: 0              # 0 = 全量训练
+  test_sample_size: 0

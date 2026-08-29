@@ -1,0 +1,21 @@
+# zhang2015-specific-face-model 版 EVE 归一化配置（协议见 preprocess/zhang2015-specific-face-model/normalization_protocol.md）
+# 与 zhang2015-insightface 版同构；差异：仅 landmarks 模式（必填）、逐被试×相机个性化模型
+# （cam{cc:02d}_model6，未过建模准则的相机回退通用）、输出 2TB 固态
+name: eve
+raw_data_dir: /media/yanglinxuan/zyx/EVE_dataset/eve_dataset
+output_dir: /media/yanglinxuan/sfm/eve_specific_224             # 输出（按 split 分目录，lzf）
+face_model_root: /media/yanglinxuan/ylx/eve_specific_face_model/face_models
+landmarks_dir: /media/yanglinxuan/zyx/EVE_dataset/eve_dataset/landmarks   # 必填（按 split 分目录）
+cameras: [basler, webcam_l, webcam_c, webcam_r]   # 四相机全用，同一时刻四视角
+target_hz: 5            # 采样率：interval = round(fps/target_hz)
+splits:                 # train39 / 官方 val05 为平台 test（与 insightface 版一致）
+  train: [train01, train02, train03, train04, train05, train06, train07, train08,
+          train09, train10, train11, train12, train13, train14, train15, train16,
+          train17, train18, train19, train20, train21, train22, train23, train24,
+          train25, train26, train27, train28, train29, train30, train31, train32,
+          train33, train34, train35, train36, train37, train38, train39]
+  test: [val01, val02, val03, val04, val05]
+subjects: []            # 调试：只处理这些被试，空列表 = splits 全部
+max_steps: 0            # 调试：每被试只处理前 N 个 step（0 = 全部）
+max_frames: 0           # 调试：每 step 只处理流内前 N 帧（0 = 全部）
+num_read_workers: 1     # mp4 预读线程
