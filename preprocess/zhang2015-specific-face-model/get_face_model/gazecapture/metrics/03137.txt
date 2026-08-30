@@ -1,5 +1,0 @@
-# 设备 iPhone 6 Plus | 朝向组 ['ori1', 'ori3', 'ori4'] | train RMS 中位 0.59 px | test RMS 中位 1.17 px | 通用模型 test RMS 中位 1.55 px | 改善 1.3x | IOD 均值 90.5 mm
-# group  n_train_kept  train_rms_px  test_rms_px  test_rms_generic_px  iod_mm
-ori1  10  0.47  0.93  1.54  90.4
-ori3  9  0.65  1.33  1.91  90.0
-ori4  10  0.59  1.17  1.55  91.1

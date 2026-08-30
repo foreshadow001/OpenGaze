@@ -107,6 +107,18 @@ python preprocess.py --dataset xgaze --method zhang2015-insightface --set 'subje
 - 预处理会**覆盖**输出目录同名 h5；调试务必 `--set output_dir=...` 指向临时目录
 - onnxruntime 需 GPU 版（`onnxruntime-gpu`；勿装 CPU 版 `onnxruntime`，否则 insightface 静默跑 CPU）。若报缺 cudnn/cublas，前缀 `LD_LIBRARY_PATH=<env>/lib/python3.12/site-packages/nvidia/{cu13,cudnn}/lib`
 
+### 人脸模型标准坐标系（解剖轴定义）
+
+specific-face-model 管线的人脸模型统一在此标准系下交付（唯一实现
+`utils/normalization.py: canonicalize_face_model()`）：
+
+- **零位标准**：roll = 0 ⇔ 两眼中心连线 ∥ x 轴；yaw = 0 ⇔ 眼心—鼻心连线 ⊥ x 轴；pitch = 0 ⇔ 眼心—鼻心连线 ∥ y 轴
+- **构造**：x̂ = 眼心连线方向；ŷ = 眼→鼻连线去 x̂ 分量后归一；ẑ = x̂ × ŷ（右手系，指向头内）；原点 = 眼心
+- **模型标准化三步管线**（防坐标系漂移，所有模型交付前必经）：① Kabsch 刚体粗对齐到 gen6（无缩放，仅消头运动/初始朝向）→ ② `canonicalize_face_model()` 欧拉角归零 → ③ 中心化到眼心（②③合并于该函数输出）
+- **头姿解算与归一化在此标准系下进行**（头姿 pitch/yaw/roll 为解剖角；与 v1 insightface 管线的 gen6 原生系相差 13.46°，跨管线比较头姿读数差 ~13° 属坐标系修正而非 bug）
+- **pitch 零位 = 眼→鼻连线空间竖直**（非自然平视）：自然平视时鼻线前倾 ~13.2°（解剖常数），故自然/微低头姿态读约 +1~+16°、正 pitch = 抬头；该前倾是深度倾斜，归一化 patch 中鼻线只显缩短不显倾斜，勿以 2D 目测校验
+- 细节与参考数字见 [get_face_model/xgaze/README.md](preprocess/zhang2015-specific-face-model/get_face_model/xgaze/README.md)；本平台标准模型 `canonical_mean6.txt`（IOD 86.1 / 鼻宽 26.7 mm）也在此系下
+
 ## 实验目录结构
 
 每次训练自包含，可复现：

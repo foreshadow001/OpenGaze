@@ -1,5 +1,0 @@
-# 设备 iPad Mini | 朝向组 ['ori1', 'ori3', 'ori4'] | train RMS 中位 0.32 px | test RMS 中位 0.74 px | 通用模型 test RMS 中位 1.84 px | 改善 2.5x | IOD 均值 90.8 mm
-# group  n_train_kept  train_rms_px  test_rms_px  test_rms_generic_px  iod_mm
-ori1  7  0.32  0.64  1.79  91.6
-ori3  7  1.02  1.58  3.31  90.6
-ori4  8  0.26  0.74  1.84  90.3

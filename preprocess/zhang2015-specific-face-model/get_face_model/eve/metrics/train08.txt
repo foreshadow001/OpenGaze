@@ -1,6 +1,0 @@
-# 相机组 ['cam00', 'cam01', 'cam02', 'cam03'] | train RMS 中位 0.28 px | test RMS 中位 0.57 px | 通用模型 test RMS 中位 3.84 px | 改善 6.8x | IOD 均值 91.0 mm
-# group  n_train_kept  train_rms_px  test_rms_px  test_rms_generic_px  iod_mm
-cam00  30  0.25  0.52  3.28  90.5
-cam01  30  0.30  0.62  3.99  91.3
-cam02  30  0.25  0.51  3.80  91.6
-cam03  30  0.41  0.69  3.89  90.6

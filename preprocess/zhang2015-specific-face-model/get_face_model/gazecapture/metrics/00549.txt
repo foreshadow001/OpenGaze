@@ -1,5 +1,0 @@
-# 设备 iPad Air | 朝向组 ['ori1', 'ori2', 'ori3'] | train RMS 中位 0.18 px | test RMS 中位 0.27 px | 通用模型 test RMS 中位 2.26 px | 改善 8.3x | IOD 均值 89.2 mm
-# group  n_train_kept  train_rms_px  test_rms_px  test_rms_generic_px  iod_mm
-ori1  8  0.08  0.16  2.41  89.1
-ori2  7  0.25  0.66  2.12  89.1
-ori3  7  0.18  0.27  2.26  89.4

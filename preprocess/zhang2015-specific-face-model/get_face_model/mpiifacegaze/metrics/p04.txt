@@ -1,3 +1,0 @@
-# 组数 1 | train RMS 0.51 px | test RMS 0.88 px | 通用模型 test RMS 2.90 px | 改善 3.3x | IOD 90.4 mm
-# group  n_train_kept  train_rms_px  test_rms_px  test_rms_generic_px  iod_mm
-cam00  30  0.51  0.88  2.90  90.4

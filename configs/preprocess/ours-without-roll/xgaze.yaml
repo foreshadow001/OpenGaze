@@ -1,0 +1,14 @@
+# ours-without-roll 版 XGaze 归一化配置（第三版：fixed_forward 相机系 + HCS 视线标注）
+# 模型直接复用 v2 个性化建模产物（ylx 盘，不重建）；仅 landmarks 模式
+name: xgaze
+raw_data_dir: /media/yanglinxuan/Expansion/xgaze_raw/data
+sub_folder: train
+annotation_dir: /media/yanglinxuan/Expansion/xgaze_raw/data/annotation_train
+calib_dir: /media/yanglinxuan/Expansion/xgaze_raw/calibration/cam_calibration
+output_dir: /media/yanglinxuan/sfm/xgaze_ours_without_roll_224   # 每人一个 h5，lzf
+face_model_root: /media/yanglinxuan/ylx/xgaze_specific_face_model/face_models
+landmarks_dir: /media/yanglinxuan/Expansion/xgaze_raw/data/landmarks          # 必填
+pnp_points: 6          # 6（model6+IDX6，默认）/ 28（model28+RIGID，A/B 对比）
+subjects: []           # 空列表 = 全部受试者
+max_frames: 0          # 调试：只处理每人前 N 帧（0 = 全部）
+num_read_workers: 8

@@ -109,6 +109,34 @@ insightface 106 点 → estimateHeadPose(K=h5 的 camera_matrix, dist=0)   # mp4
 含义：(a) 上述屏幕系约定正确且唯一；(b) 实现完成后可用 `face_g_tobii` 对拍我们管线的标签做质检，
 预期差异仅来自关键点/头姿来源不同（insightface+PnP vs 官方 FAN+PnP）。
 
+### 4.1 `face_g_tobii` 的真实语义与使用陷阱（2026-08-30 补充，已对拍）
+
+`face_g_tobii` **不是相机系原始视线方向**，而是官方 `face_R` 归一化后（头架）的
+视线 (θ,φ)——四相机同一物理时刻的该值理论上相同（官方帧号对齐为近似）。若直接把
+`gv(θ,φ)` 当相机系方向使用，会产生 ~40° 量级的系统性错误（实测跨相机"一致性"p50
+41.7°，即此陷阱的特征信号）。
+
+**反旋转回相机系**（与 PoG 重构对拍，3 相机 dot = ±1.000000）：
+
+```
+d_cam = − face_Rᵀ @ gv(θ, φ)      # face_R 逐相机逐帧读自同一 h5；负号是官方约定的 z 翻转
+gaze_point = 头位置 + d_cam·600     # 再走 normalizeData_face（v1 管线 PoG 路径等价）
+```
+
+**跨相机 HCS 一致性实测**（严格三角化头姿 + PoG 直算链，固定参考 cam00，
+44 被试 × 120 组，`get_face_model/eve/metrics/frame_consistency/pos_hcs_consistency.py`）：
+
+| 臂 | HCS 一致性 (vs cam00) |
+|---|---|
+| gen6 逐相机 PnP（v1 形态） | 10.08° |
+| true6 四台一组 DLT（v2 形态） | **0.04°（机器精度）** |
+
+**结论修正（2026-08-30 晚）**：各相机 h5 的 PoG/g_tobii 是同一路 tobii 流按
+同步帧号分发的——PoG 直算链下跨相机一致性 0.04°，**不存在此前认为的 ~2°
+webcam 时钟同步残差**（早期用 face_g_tobii+face_R 反旋转链测得的 1~2° 残差
+来自官方 face_R 逐相机归一化噪声 + 600mm 合成注视点近似，非数据本身）。
+basler //2 帧号映射由此得到机器精度级验证。
+
 ## 5. 划分方案（决策点 D3）
 
 - 官方 test（10 人）不可用：无 GT（且本地仅 6/10）→ **弃用 test01–06**（46.2 万帧，无标注价值）
