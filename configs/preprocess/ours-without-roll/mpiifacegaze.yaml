@@ -1,0 +1,8 @@
+# ours-without-roll 版 MPIIFaceGaze 归一化配置（v3，协议见 preprocess/ours-without-roll/normalization_protocol.md）
+# 数据源 = v2 产物 + 原始数据（day 图 / Camera.mat）；单目，世界系 = 相机
+name: mpiifacegaze
+v2_dir: /media/yanglinxuan/sfm/mpiifacegaze_specific_224  # v2 产物（每人一个 pXX.h5）
+raw_data_dir: /media/yanglinxuan/zyx/MPIIFaceGaze
+output_dir: /media/yanglinxuan/sfm/mpiifacegaze_noroll_224  # 输出（每人一个 pXX.h5，lzf）
+subjects: []           # 空列表 = 全部 15 人；指定则如 ["p00"]
+max_frames: 0          # 调试：每人前 N 行样本（0 = 全部）

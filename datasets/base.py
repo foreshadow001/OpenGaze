@@ -33,11 +33,13 @@ class GazeH5Dataset(Dataset):
         files:        h5 文件名列表
         bgr_to_rgb:   官方 ETH-XGaze h5 为 BGR 存储，需翻转；自行预处理的 RGB 数据传 False
         sample_size:  >0 时随机抽取前 N 个样本（shuffle 后截断），0 = 全量
+        label_field:  标签字段（face_gaze=CCS 相机系 / face_gaze_hcs=头架系，
+                      见 label_field_of；v1 产物仅有 face_gaze）
     """
 
     def __init__(self, dataset_path, sub_folder, files,
                  transform=default_transform, is_shuffle=True,
-                 sample_size=0, bgr_to_rgb=False):
+                 sample_size=0, bgr_to_rgb=False, label_field='face_gaze'):
         self.dataset_path = dataset_path
         self.sub_folder = sub_folder
         self.selected_files = list(files)
@@ -58,6 +60,7 @@ class GazeH5Dataset(Dataset):
 
         self.transform = transform
         self.bgr_to_rgb = bgr_to_rgb
+        self.label_field = label_field
         self.hdf = None
 
     def __len__(self):
@@ -74,9 +77,17 @@ class GazeH5Dataset(Dataset):
             image = image[:, :, [2, 1, 0]]
         image = self.transform(image)
 
-        gaze_label = self.hdf['face_gaze'][idx_in_file, :].astype('float32')
+        gaze_label = self.hdf[self.label_field][idx_in_file, :].astype('float32')
         self.hdf.close()
         return image, gaze_label
+
+
+def label_field_of(dataset_config):
+    """dataset.label（'ccs' | 'hcs'）→ h5 标签字段名（--label，main.py）"""
+    label = getattr(dataset_config, 'label', 'ccs') or 'ccs'
+    if label not in ('ccs', 'hcs'):
+        raise ValueError(f"未知 dataset.label: {label}（可选 ccs / hcs）")
+    return 'face_gaze_hcs' if label == 'hcs' else 'face_gaze'
 
 
 def make_train_loader(dataset, batch_size, num_workers, distributed=False):

@@ -1,0 +1,29 @@
+# gazecapture 数据集配置（v3 ours-without-roll 管线，roll-only 归一化，世界系 = 相机）
+# 协议见 preprocess/ours-without-roll/normalization_protocol.md；索引/划分与
+# v1/v2 逐样本同构。标签源由 dataset.label 指定（--label ccs|hcs，默认 ccs）：
+#   ccs = face_gaze（v3 归一化相机系，roll 修正、头姿保留）
+#   hcs = face_gaze_hcs（头架系，与归一化无关，v3 训练目标）
+
+label: ccs
+name: gazecapture
+data_dir: /media/yanglinxuan/sfm/gazecapture_noroll_224
+
+split:
+  train:
+    sub_folder: train
+    split_file: configs/splits/gazecapture_faze.yaml   # FAZE 式筛选后的 session 列表
+    split_key: train
+  test:
+    sub_folder: test
+    split_file: configs/splits/gazecapture_faze.yaml
+    split_key: test
+
+# epoch 协议（跟随数据集，见 CLAUDE.md 约定 8；2026-08-28 修订 15→10）：
+# 干净标签完整曲线 r50 5/10/15ep = 3.74/3.63/4.01（10ep 后跨 session 过拟合，与 EVE 同型）
+train:
+  epochs: 10
+
+dataloader:
+  num_workers: 5
+  train_sample_size: 0              # 0 = 全量训练
+  test_sample_size: 0

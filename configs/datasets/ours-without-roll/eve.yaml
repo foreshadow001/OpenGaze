@@ -1,0 +1,71 @@
+# eve 数据集配置（v3 ours-without-roll 管线，roll-only 归一化，世界系头姿 = basler 相机系）
+# 协议见 preprocess/ours-without-roll/normalization_protocol.md；索引/划分与
+# v1/v2 逐样本同构。标签源由 dataset.label 指定（--label ccs|hcs，默认 ccs）：
+#   ccs = face_gaze（v3 归一化相机系，roll 修正、头姿保留）
+#   hcs = face_gaze_hcs（头架系，与归一化无关，v3 训练目标）
+
+label: ccs
+name: eve
+data_dir: /media/yanglinxuan/sfm/eve_noroll_224
+
+split:
+  train:
+    sub_folder: train
+    subjects:
+      - train01.h5
+      - train02.h5
+      - train03.h5
+      - train04.h5
+      - train05.h5
+      - train06.h5
+      - train07.h5
+      - train08.h5
+      - train09.h5
+      - train10.h5
+      - train11.h5
+      - train12.h5
+      - train13.h5
+      - train14.h5
+      - train15.h5
+      - train16.h5
+      - train17.h5
+      - train18.h5
+      - train19.h5
+      - train20.h5
+      - train21.h5
+      - train22.h5
+      - train23.h5
+      - train24.h5
+      - train25.h5
+      - train26.h5
+      - train27.h5
+      - train28.h5
+      - train29.h5
+      - train30.h5
+      - train31.h5
+      - train32.h5
+      - train33.h5
+      - train34.h5
+      - train35.h5
+      - train36.h5
+      - train37.h5
+      - train38.h5
+      - train39.h5
+  test:
+    sub_folder: test
+    subjects:
+      - val01.h5
+      - val02.h5
+      - val03.h5
+      - val04.h5
+      - val05.h5
+
+# epoch 协议（跟随数据集，见 CLAUDE.md 约定 8）：两 backbone 均在 10ep 最佳
+# （3.12/3.08°），之后跨被试泛化过拟合（25ep 差 ~0.3°）
+train:
+  epochs: 10
+
+dataloader:
+  num_workers: 5
+  train_sample_size: 0              # 0 = 全量训练
+  test_sample_size: 0

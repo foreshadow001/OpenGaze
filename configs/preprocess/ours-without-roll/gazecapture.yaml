@@ -1,0 +1,10 @@
+# ours-without-roll 版 GazeCapture 归一化配置（v3，协议见 preprocess/ours-without-roll/normalization_protocol.md）
+# 数据源 = v2 产物 + 原始数据（帧图 / 内参 xml）；单目，世界系 = 相机
+name: gazecapture
+v2_dir: /media/yanglinxuan/sfm/gazecapture_specific_224   # v2 产物（按 split 分目录）
+raw_data_dir: /media/yanglinxuan/zyx/GazeCapture
+calibration_dir: /media/yanglinxuan/zyx/GazeCapture/calibration  # 内参 xml（15 设备×双分辨率）
+output_dir: /media/yanglinxuan/sfm/gazecapture_noroll_224  # 输出（按 split 分目录，lzf）
+splits: [train, test]  # 处理哪些 split（与 v2 产物目录一致）
+sessions: []           # 空列表 = v2 产物全部 session
+max_frames: 0          # 调试：每 session 前 N 行样本（0 = 全部）

@@ -1,0 +1,42 @@
+# mpiifacegaze 数据集配置（v3 ours-without-roll 管线，roll-only 归一化，世界系 = 相机）
+# 协议见 preprocess/ours-without-roll/normalization_protocol.md；索引/划分与
+# v1/v2 逐样本同构。标签源由 dataset.label 指定（--label ccs|hcs，默认 ccs）：
+#   ccs = face_gaze（v3 归一化相机系，roll 修正、头姿保留）
+#   hcs = face_gaze_hcs（头架系，与归一化无关，v3 训练目标）
+
+label: ccs
+name: mpiifacegaze
+data_dir: /media/yanglinxuan/sfm/mpiifacegaze_noroll_224
+
+split:
+  mode: leave_one_out
+  fold: 0                           # 0~14，配合 mode: leave_one_out 使用
+  sub_folder: ''                    # h5 直接在 data_dir 下（无子目录）
+  subjects:                         # 15 个被试
+      - p00.h5
+      - p01.h5
+      - p02.h5
+      - p03.h5
+      - p04.h5
+      - p05.h5
+      - p06.h5
+      - p07.h5
+      - p08.h5
+      - p09.h5
+      - p10.h5
+      - p11.h5
+      - p12.h5
+      - p13.h5
+      - p14.h5
+
+# epoch 协议（跟随数据集，见 CLAUDE.md 约定 8）：r50 15-25ep 持平取 20；
+# r18 到 25ep 仍在缓降（5.29→5.12），按方法细分
+train:
+  epochs: 20
+  epochs_by_method:
+    resnet18: 25
+
+dataloader:
+  num_workers: 5
+  train_sample_size: 0              # 0 = 全量训练
+  test_sample_size: 0

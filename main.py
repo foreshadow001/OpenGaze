@@ -47,6 +47,11 @@ def parse_args():
                         help='configs/methods/ 下的配置名，如 resnet50；'
                              '测试/续训时可省略，默认用实验快照中的 method')
     parser.add_argument('--test', action='store_true', help='测试模式')
+    parser.add_argument('--label', choices=['ccs', 'hcs'], default=None,
+                        help='训练/测试的视线标签：ccs=归一化相机系（face_gaze，'
+                             '默认），hcs=头架系（face_gaze_hcs，v3 产物）。'
+                             '训练时写入快照；测试时快照优先（跨数据集评测'
+                             '自动沿用源实验标签），显式指定则覆盖')
     parser.add_argument('--resume', default=None, metavar='EXPNN',
                         help='断点续训：从指定实验目录的最新 ckpt 恢复，'
                              '配置以该实验的快照为准（如 --resume exp01）')
@@ -158,6 +163,8 @@ def run_train(args):
             apply_overrides(config, args.set)
             if is_main:
                 log.info(f'续训配置覆盖: {args.set}')
+        if args.label:
+            config.dataset.label = args.label
 
         # 实验目录/快照/run.log 仅主进程写；其余进程不挂 ExperimentLogger
         logger = None
@@ -178,6 +185,8 @@ def run_train(args):
 
     # ------------------------------------------------------------ 新训练
     config, _, method_yaml_path = load_config(args.dataset, args.method, args.set)
+    if args.label:                          # 标签源（ccs/hcs）随快照留档
+        config.dataset.label = args.label
 
     # 实验目录/快照/run.log 仅主进程写；其余进程不挂 ExperimentLogger
     logger = None
@@ -216,6 +225,8 @@ def run_test(args):
     if args.method and args.method != snapshot_method:
         raise SystemExit(f'--method {args.method} 与实验 {args.exp} 的 method '
                          f'{snapshot_method} 不一致，请检查')
+    # 标签源：快照优先（hcs 训练的模型必须用 hcs 标签评测），--label 显式覆盖
+    label = getattr(snapshot.dataset, 'label', None) or args.label
     if args.dataset != snapshot_dataset:
         # 跨数据集评测：用指定数据集的配置替换 dataset 段
         log.info(f'[*] 跨数据集评测: 模型来自 {args.exp}'
@@ -226,6 +237,10 @@ def run_test(args):
         snapshot.dataset_config = args.dataset
         if args.dataset.split('/')[-1] == "mpiifacegaze":
             snapshot.dataset.split.mode = "all_subjects"
+    if label:
+        snapshot.dataset.label = label      # ccs 默认不记，hcs 显式留痕于快照
+        if label == 'hcs':
+            log.info('[*] 标签源: hcs（face_gaze_hcs）')
     if args.set:
         # 测试时的临时覆盖（如 dataset.split.mode=all_subjects），不写回快照
         apply_overrides(snapshot, args.set)

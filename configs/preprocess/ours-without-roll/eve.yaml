@@ -1,0 +1,15 @@
+# ours-without-roll 版 EVE 归一化配置（v3，协议见 preprocess/ours-without-roll/normalization_protocol.md）
+# 数据源 = v2 产物 + 原始数据（mp4 / step 标定 h5）；世界系 = basler 相机系
+name: eve
+v2_dir: /media/yanglinxuan/sfm/eve_specific_224        # v2 产物（按 split 分目录）
+raw_data_dir: /media/yanglinxuan/zyx/EVE_dataset/eve_dataset
+output_dir: /media/yanglinxuan/sfm/eve_noroll_224      # 输出（按 split 分目录，lzf）
+splits:
+  train: [train01, train02, train03, train04, train05, train06, train07, train08,
+          train09, train10, train11, train12, train13, train14, train15, train16,
+          train17, train18, train19, train20, train21, train22, train23, train24,
+          train25, train26, train27, train28, train29, train30, train31, train32,
+          train33, train34, train35, train36, train37, train38, train39]
+  test: [val01, val02, val03, val04, val05]
+subjects: []            # 调试：只处理这些被试，空列表 = splits 全部
+max_frames: 0           # 调试：每被试前 N 行样本（0 = 全部）

@@ -260,7 +260,8 @@ def load_eve(rng):
             rvec = cv2.Rodrigues(Rs[cam_c] @ R_head)[0]
             tvec = Rs[cam_c] @ t_head.reshape(3, 1) + ts[cam_c]
             out.append((img, lm[lm_row], Ks[cam_c], None, model, gps[cam_c],
-                        f'{subj}/{cam_name}/f{fidx:04d}', rvec, tvec, camd))
+                        f'{subj}/{cam_name}/f{fidx:04d}', rvec, tvec, camd,
+                        step_name))          # 末位附 step（v3 版采样对齐用）
             break
         if len(out) >= N_SAMPLE:
             break
@@ -381,7 +382,7 @@ def load_mpii(rng):
 
 # --------------------------------------------------------------- 主流程
 def process_one(item):
-    img, lm106, K, dist, model6, gp, sample_id, rvec, tvec, camd = item
+    img, lm106, K, dist, model6, gp, sample_id, rvec, tvec, camd = item[:10]
     if dist is None:
         dist = np.zeros((1, 5))
     if rvec is None:                       # GC/MPII：gen6 6 点 PnP
