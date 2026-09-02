@@ -37,8 +37,9 @@ sys.path.insert(0, str(_PROJECT / 'preprocess/zhang2015-specific-face-model/get_
 
 import face_model_core as core
 from utils.logger import get_logger
-from utils.normalization import (estimateHeadPose, head_pose_angles,
-                                 normalizeData_face, vector_to_angles)
+from utils.normalization import (HEAD_PITCH_OFFSET, estimateHeadPose,
+                                 head_pose_angles, normalizeData_face,
+                                 vector_to_angles)
 
 # 官方 GC 预处理器（dot→CCS→相机系唯一实现，避免手抄漂移）
 _gc_spec = importlib.util.spec_from_file_location(
@@ -399,7 +400,11 @@ def process_one(item):
     fwd = np.array([0.0, 0.0, -1.0])
     return {'patch': img_w, 'id': sample_id,
             'head': head_pose_angles(hR, is_true6=True),
-            'head_r': np.degrees(vector_to_angles(hR_raw @ fwd)),
+            'head_r': (head_pose_angles(hR_raw, is_true6=True)
+                        if abs(np.degrees(vector_to_angles(hR_raw @ fwd)[1])) <= 90
+                        else (np.degrees(vector_to_angles(hR_raw @ fwd)[0])
+                              + HEAD_PITCH_OFFSET,
+                              np.degrees(vector_to_angles(hR_raw @ fwd)[1]))),
             'ccs': np.degrees(vector_to_angles(gc_ccs.ravel())),
             'ccs_r': np.degrees(vector_to_angles(gc_raw)),
             'hcs': np.degrees(vector_to_angles(gc_hcs.ravel())),

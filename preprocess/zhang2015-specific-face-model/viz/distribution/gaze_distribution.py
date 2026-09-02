@@ -6,8 +6,10 @@
   DLT/Kabsch 头姿每 frame 一次；
 - gc/mpii：逐帧 6 点 PnP。
 每数据集采样 ~2000+ frame，画 gaze pitch×yaw 2D 直方图热力图：
-两行 = CCS（归一化相机系）/ HCS（头架系，与归一化无关），
-一个数据集一列；±120°，风格与 insightface_224 分布图一致
+四行 = CCS（归一化相机系）/ Head norm / Head raw（**xgaze 第三行为世界系
+头姿 Head world**——per-camera 坐标卡在穹顶极点附近有参数化拖尾，见
+exception/pitch60_tail/README.md；其余数据集单/少相机仍用 raw）/ HCS（头架
+系，与归一化无关），一个数据集一列；±120°，风格与 insightface_224 分布图一致
 （共用色轴 深蓝→浅蓝→浅绿→浅黄→红；深蓝底 + 白色网格 30°主/15°细 +
 方格等比 + 横轴 yaw、纵轴 pitch）。
 
@@ -36,7 +38,8 @@ sys.path.insert(0, str(_PROJECT / 'preprocess/zhang2015-specific-face-model/get_
 import face_model_core as core
 from utils.logger import get_logger
 from utils.normalization import estimateHeadPose, gaze_head_angles, \
-    normalizeData_face, vector_to_angles
+    HEAD_PITCH_OFFSET, head_pose_angles, normalizeData_face, \
+    vector_to_angles
 
 log = get_logger('preprocess.specific_face_model.gaze_dist')
 
@@ -56,7 +59,26 @@ LIM, BINS = 120, 480        # ±120°，0.5° 一格（超界丢弃不堆积）
 NOISE_MIN_SAMPLES = 3        # 可见门限：池化格内 ≥3 个样本（自适应各面板样本量）
 
 
-angles = gaze_head_angles   # utils 共享实现（ccs/hcs/head 统一口径）
+def angles(model, rvec, tvec, gp, K, head_world=None):
+    """(ccs, hcs, head_norm, head_raw) 度数。
+
+    head_world 非 None 时第 4 位返回它（世界系头姿，xgaze 专用）——多相机
+    穹顶的 per-camera 坐标卡在极点附近会把 1–3° 物理差异放大成 yaw 大扫掠
+    （pitch≈60° 拖尾，量化分析见 exception/pitch60_tail/README.md）；世界系
+    坐标卡对所有相机唯一、极点在世界 ±y 轴（数据远离），且与 cam00 读数
+    天然一致。
+    """
+    ccs, hcs, head = gaze_head_angles(model, rvec, tvec, gp, K)
+    if head_world is not None:
+        return ccs, hcs, head, head_world
+    # raw 头姿：只加 −30° 零位（标准系约定），不解缠绕——多相机数据集
+    # 的原相机系 yaw 天然可超 ±90°，解缠绕会把 |yaw|>90° 折回主域并
+    # 生成假 pitch 拖尾（xgaze 18 相机穹顶实测）
+    hR_raw = cv2.Rodrigues(rvec)[0]
+    v = hR_raw @ np.array([0.0, 0.0, -1.0])
+    t_raw, p_raw = vector_to_angles(v)
+    head_raw = (np.degrees(t_raw) + HEAD_PITCH_OFFSET, np.degrees(p_raw))
+    return ccs, hcs, head, head_raw
 
 
 # ------------------------------------------------------------ XGaze
@@ -110,13 +132,19 @@ def sample_xgaze(rng, k_frame=300):
                 continue
             X_w = core.triangulate(np.stack(rays), np.stack(pv), n_points=6)
             R_head, t_head = core.kabsch(model, X_w)
+            # 世界系头姿（方案 A，每帧一次）：R_head 的模型 −z 轴在世界系的
+            # 2 角读数 + 标准模型 −30° 零位——与 cam00 读数天然一致（差其
+            # 安装滚转 ~1°），极点在世界 ±y 轴、数据远离，无参数化拖尾
+            v_w = R_head @ np.array([0., 0., -1.])
+            t_w, p_w = vector_to_angles(v_w)
+            world = (np.degrees(t_w) + HEAD_PITCH_OFFSET, np.degrees(p_w))
             for c, _ in rows:                       # 全部相机入样（v1 口径）
                 gp = ann.get((f'frame{fidx:04d}', f'cam{c:02d}.JPG'))
                 if gp is None:
                     continue
                 rvec = cv2.Rodrigues(ROT[c] @ R_head)[0]
                 tvec = ROT[c] @ t_head.reshape(3, 1) + TR[c]
-                out.append((model, rvec, tvec, gp, KS[c]))
+                out.append((model, rvec, tvec, gp, KS[c], world))
     return out
 
 
@@ -342,14 +370,17 @@ def main():
         log.info('旧单体缓存已迁移为逐数据集缓存')
 
     for name, fn in plan:
+        # xgaze 第三行用世界系头姿（方案 A）；其余数据集维持 per-camera raw
+        raw_tag = 'HEAD_WORLD' if name == 'xgaze' else 'HEAD_RAW'
         cfile = _here / f'gd_cache_{name}.npz'
         if not refresh_all and name not in refresh_set and cfile.is_file():
             z = np.load(cfile)
-            ns[name] = int(z['ns'])
-            for tag in ('CCS', 'HEAD', 'HCS'):
-                hists[(name, tag)] = z[tag]
-            log.info(f'缓存命中 {name}（n={ns[name]:,}）')
-            continue
+            if raw_tag in z.files:                 # 新口径键齐才命中（旧 xgaze 缓存自动失效重算）
+                ns[name] = int(z['ns'])
+                for tag in ('CCS', 'HEAD', 'HCS', raw_tag):
+                    hists[(name, tag)] = z[tag]
+                log.info(f'缓存命中 {name}（n={ns[name]:,}）')
+                continue
         items = fn(rng)
         res = [angles(*it) for it in
                tqdm(items, desc=f'{name} 角度', unit='样本', leave=False)]
@@ -357,6 +388,7 @@ def main():
         log.info(f'{name}: {ns[name]} 样本（(frame,cam) 口径）')
         for g, tag in [(np.array([r[0] for r in res]), 'CCS'),
                        (np.array([r[2] for r in res]), 'HEAD'),
+                       (np.array([r[3] for r in res]), raw_tag),
                        (np.array([r[1] for r in res]), 'HCS')]:
             m = (np.abs(g[:, 0]) <= LIM) & (np.abs(g[:, 1]) <= LIM)
             H = np.histogram2d(
@@ -365,7 +397,7 @@ def main():
             # 密度归一（% 每格）：与样本量无关，同色 = 同概率质量
             hists[(name, tag)] = H / len(res) * 100.0
         np.savez_compressed(cfile, ns=ns[name],
-                            **{t: hists[(name, t)] for t in ('CCS', 'HEAD', 'HCS')})
+                            **{t: hists[(name, t)] for t in ('CCS', 'HEAD', raw_tag, 'HCS')})
         log.info(f'缓存写入 {cfile.name}')
     # ---- 统计落 CSV（由缓存直方图加权计算） ----
     edges_ = np.linspace(-LIM, LIM, BINS + 1)
@@ -382,8 +414,11 @@ def main():
         f.write('dataset,frame,n,pitch_mean,pitch_median,pitch_std,pitch_p5,pitch_p95,'
                 'yaw_mean,yaw_median,yaw_std,yaw_p5,yaw_p95\n')
         for name, _ in plan:
-            for tag in ('CCS', 'HEAD', 'HCS'):
+            tags = ('CCS', 'HEAD', 'HEAD_WORLD' if name == 'xgaze' else 'HEAD_RAW', 'HCS')
+            for tag in tags:
                 H = hists[(name, tag)]              # (n_yaw, n_pitch) 密度
+                if not H.any():
+                    continue                        # HEAD_RAW 旧缓存兜底全零
                 cnt = H / 100.0 * ns[name]
                 pm, pmd, ps, p5, p95 = _stat(cnt.sum(axis=0))   # pitch 边际
                 ym, ymd, ys, y5, y95 = _stat(cnt.sum(axis=1))   # yaw 边际
@@ -406,10 +441,13 @@ def main():
         vmax = max(H.max() / 3.0, vmin * 20)
         return LogNorm(vmin=vmin, vmax=vmax)
 
-    fig, axes = plt.subplots(3, 4, figsize=(24, 17.5))
-    ROW_TAG = {'CCS': 'CCS gaze', 'HEAD': 'Head pose', 'HCS': 'HCS gaze'}
+    fig, axes = plt.subplots(4, 4, figsize=(24, 22))
+    ROW_TAG = {'CCS': 'CCS gaze', 'HEAD': 'Head pose (norm)',
+              'HEAD_RAW': 'Head pose (raw)',
+              'HEAD_WORLD': 'Head pose (world)', 'HCS': 'HCS gaze'}
     for j, (name, _) in enumerate(plan):
-        for i, tag in enumerate(['CCS', 'HEAD', 'HCS']):
+        tags = ['CCS', 'HEAD', 'HEAD_WORLD' if name == 'xgaze' else 'HEAD_RAW', 'HCS']
+        for i, tag in enumerate(tags):
             ax = axes[i, j]
             H = pool(hists[(name, tag)])
             im = ax.imshow(H.T, origin='lower', cmap=cmap,
@@ -431,7 +469,8 @@ def main():
                          label='density (% per bin)')
 
     fig.suptitle('Gaze & head-pose distribution — specific-face-model chain '
-                 '(canonical models)  rows: CCS gaze / Head pose / HCS gaze',
+                 '(canonical models)  rows: CCS / Head norm / Head raw '
+                 '(xgaze: Head world) / HCS',
                  fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.97])
     out = _here / 'gaze_distribution_specific.png'

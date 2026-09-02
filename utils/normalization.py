@@ -97,8 +97,12 @@ def normalizeData_face(img, face_model, rvec, tvec, gaze_point, camera_matrix,
 
 
 def vector_to_angles(v):
-    """方向向量 -> (theta, phi) 弧度, 与官方 h5 的 face_gaze 约定一致."""
-    theta = np.arcsin((-1) * v[1])
+    """方向向量 -> (theta, phi) 弧度, 与官方 h5 的 face_gaze 约定一致.
+
+    arcsin 实参裁剪到 [-1,1]：单位向量经旋转矩阵乘法后 |v[1]| 可越界
+    1e-16 量级，不裁剪会静默产生 NaN。
+    """
+    theta = np.arcsin(np.clip((-1) * v[1], -1.0, 1.0))
     phi = np.arctan2((-1) * v[0], (-1) * v[2])
     return theta, phi
 
