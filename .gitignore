@@ -10,6 +10,7 @@ exp/
 
 # 预处理运行日志（run.log + failures.json）
 preprocess/log/
+**/log/
 
 # 编辑器 / 系统
 .vscode/
