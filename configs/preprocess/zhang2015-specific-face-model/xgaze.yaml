@@ -7,9 +7,10 @@ sub_folder: train
 annotation_dir: /media/yanglinxuan/Expansion/xgaze_raw/data/annotation_train   # 标注 CSV
 calib_dir: /media/yanglinxuan/Expansion/xgaze_raw/calibration/cam_calibration # 相机标定 xml
 output_dir: /media/yanglinxuan/sfm/xgaze_specific_224           # 输出目录（每人一个 h5，lzf）
-face_model_root: /media/yanglinxuan/ylx/xgaze_specific_face_model/face_models # 个性化模型
+face_model_root: /media/yanglinxuan/sfm/xgaze_specific_face_model/face_models # 个性化模型
 landmarks_dir: /media/yanglinxuan/Expansion/xgaze_raw/data/landmarks          # 必填：landmarks 索引
 pnp_points: 6          # D1 决策 A：PnP 用 6 点（model6+IDX6）；A/B 对比时 --set pnp_points=28
 subjects: []           # 空列表 = 全部受试者；指定则如 [0, 3]
 max_frames: 0          # 调试用：只处理每人前 N 帧（0 = 全部）
 num_read_workers: 8    # 读图线程数
+num_workers: 4       # 并行被试进程数（Expansion HDD 建议 2-4）

@@ -35,7 +35,8 @@ sys.path.insert(0, str(_PROJECT / 'preprocess/zhang2015-specific-face-model/get_
 
 import face_model_core as core
 from utils.logger import get_logger
-from utils.normalization import estimateHeadPose, normalizeData_face, vector_to_angles
+from utils.normalization import estimateHeadPose, gaze_head_angles, \
+    normalizeData_face, vector_to_angles
 
 log = get_logger('preprocess.specific_face_model.gaze_dist')
 
@@ -51,17 +52,11 @@ gc_pre = importlib.util.module_from_spec(_gc_spec)
 _gc_spec.loader.exec_module(gc_pre)
 
 DUMMY = np.zeros((32, 32, 3), np.uint8)
-LIM, BINS = 120, 480        # ±120°，0.5° 一格
+LIM, BINS = 120, 480        # ±120°，0.5° 一格（超界丢弃不堆积）
 NOISE_MIN_SAMPLES = 3        # 可见门限：池化格内 ≥3 个样本（自适应各面板样本量）
 
 
-def angles(model, rvec, tvec, gp, K):
-    """(ccs(p,y), hcs(p,y)) 度数——归一化在 dummy 图上完成（warp 结果弃用）"""
-    _, hr, gc = normalizeData_face(
-        DUMMY, model, rvec, tvec, gp, K, fixed_forward=False)[:3]
-    hR = cv2.Rodrigues(hr)[0]
-    return (np.degrees(vector_to_angles(gc.ravel())),
-            np.degrees(vector_to_angles((hR.T @ gc).ravel())))
+angles = gaze_head_angles   # utils 共享实现（ccs/hcs/head 统一口径）
 
 
 # ------------------------------------------------------------ XGaze
@@ -159,7 +154,7 @@ def sample_eve(rng, k_frame=110):
         for gi in picked:
             rows_raw = groups[gi]
             step_name = steps[rows_raw[0][3]]
-            Ks, Rs, ts, ann_c = {}, {}, {}, {}
+            Ks, Rs, ts, ann_c, pog_px = {}, {}, {}, {}, {}
             ok = True
             for c, r, raw_f, _si in rows_raw:
                 p_h5 = RAW / subj / step_name / f'{cameras[c]}.h5'
@@ -179,9 +174,14 @@ def sample_eve(rng, k_frame=110):
                     # 各相机标注为同一 tobii 流分发，跨相机一致 ~0.04°）
                     PoG = np.array(f['face_PoG_tobii/data'][raw_f])
                     mmpp = np.array(f['millimeters_per_pixel'], dtype=float)
+                    pog_px[c] = PoG
                     ann_c[c] = (T @ np.array(
                         [PoG[0] * mmpp[0], PoG[1] * mmpp[1], 0., 1.]))[:3]
-            if not ok or len(ann_c) < 3:
+            # 组门控（EVE 最新定稿）：四相机齐全 + PoG 全有效 + 离散 ≤5px
+            if not ok or set(ann_c) != set(range(4)):
+                continue
+            P = np.stack([pog_px[c] for c in range(4)])
+            if np.max(np.linalg.norm(P - P.mean(0), axis=1)) > 5.0:
                 continue
             rays, pv = [], []
             for c, r, _rf, _si in rows_raw:
@@ -206,7 +206,7 @@ def sample_eve(rng, k_frame=110):
 
 
 # ------------------------------------------------------------ GazeCapture
-def sample_gc(rng, k_frame=500, n_sess=60):
+def sample_gc(rng, k_frame=500, n_sess=600):
     LM = Path('/media/yanglinxuan/zyx/GazeCapture/landmarks')
     RAW = Path('/media/yanglinxuan/zyx/GazeCapture')
     CAL = Path('/media/yanglinxuan/zyx/GazeCapture/calibration')
@@ -221,6 +221,10 @@ def sample_gc(rng, k_frame=500, n_sess=60):
             dot = json.load(open(rec / 'dotInfo.json'))
             pos = {int(n.split('.')[0]): i for i, n in
                    enumerate(json.load(open(rec / 'frames.json')))}
+            # 官方质量门（2026-08-30）：appleFace/eye IsValid 全真
+            face = json.load(open(rec / 'appleFace.json'))
+            leye = json.load(open(rec / 'appleLeftEye.json'))
+            reye = json.load(open(rec / 'appleRightEye.json'))
         except Exception:
             continue
         slug = device.lower().replace(' ', '-')
@@ -244,6 +248,9 @@ def sample_gc(rng, k_frame=500, n_sess=60):
             pi = pos.get(fidx)
             if pi is None or dot['DotNum'][pi] == -1:
                 continue
+            if not (face['IsValid'][pi] and leye['IsValid'][pi]
+                    and reye['IsValid'][pi]):
+                continue                 # 官方四条件质量门
             w, h = (480, 640) if o in (1, 2) else (640, 480)
             if (w, h) not in cals:
                 continue
@@ -339,7 +346,7 @@ def main():
         if not refresh_all and name not in refresh_set and cfile.is_file():
             z = np.load(cfile)
             ns[name] = int(z['ns'])
-            for tag in ('CCS', 'HCS'):
+            for tag in ('CCS', 'HEAD', 'HCS'):
                 hists[(name, tag)] = z[tag]
             log.info(f'缓存命中 {name}（n={ns[name]:,}）')
             continue
@@ -349,14 +356,16 @@ def main():
         ns[name] = len(res)
         log.info(f'{name}: {ns[name]} 样本（(frame,cam) 口径）')
         for g, tag in [(np.array([r[0] for r in res]), 'CCS'),
+                       (np.array([r[2] for r in res]), 'HEAD'),
                        (np.array([r[1] for r in res]), 'HCS')]:
+            m = (np.abs(g[:, 0]) <= LIM) & (np.abs(g[:, 1]) <= LIM)
             H = np.histogram2d(
-                np.clip(g[:, 1], -LIM, LIM), np.clip(g[:, 0], -LIM, LIM),
+                g[m, 1], g[m, 0],
                 bins=BINS, range=[[-LIM, LIM], [-LIM, LIM]])[0]
             # 密度归一（% 每格）：与样本量无关，同色 = 同概率质量
             hists[(name, tag)] = H / len(res) * 100.0
-        np.savez_compressed(cfile, ns=ns[name], CCS=hists[(name, 'CCS')],
-                            HCS=hists[(name, 'HCS')])
+        np.savez_compressed(cfile, ns=ns[name],
+                            **{t: hists[(name, t)] for t in ('CCS', 'HEAD', 'HCS')})
         log.info(f'缓存写入 {cfile.name}')
     # ---- 统计落 CSV（由缓存直方图加权计算） ----
     edges_ = np.linspace(-LIM, LIM, BINS + 1)
@@ -373,7 +382,7 @@ def main():
         f.write('dataset,frame,n,pitch_mean,pitch_median,pitch_std,pitch_p5,pitch_p95,'
                 'yaw_mean,yaw_median,yaw_std,yaw_p5,yaw_p95\n')
         for name, _ in plan:
-            for tag in ('CCS', 'HCS'):
+            for tag in ('CCS', 'HEAD', 'HCS'):
                 H = hists[(name, tag)]              # (n_yaw, n_pitch) 密度
                 cnt = H / 100.0 * ns[name]
                 pm, pmd, ps, p5, p95 = _stat(cnt.sum(axis=0))   # pitch 边际
@@ -397,9 +406,10 @@ def main():
         vmax = max(H.max() / 3.0, vmin * 20)
         return LogNorm(vmin=vmin, vmax=vmax)
 
-    fig, axes = plt.subplots(2, 4, figsize=(24, 12.5))
+    fig, axes = plt.subplots(3, 4, figsize=(24, 17.5))
+    ROW_TAG = {'CCS': 'CCS gaze', 'HEAD': 'Head pose', 'HCS': 'HCS gaze'}
     for j, (name, _) in enumerate(plan):
-        for i, tag in enumerate(['CCS', 'HCS']):
+        for i, tag in enumerate(['CCS', 'HEAD', 'HCS']):
             ax = axes[i, j]
             H = pool(hists[(name, tag)])
             im = ax.imshow(H.T, origin='lower', cmap=cmap,
@@ -414,14 +424,15 @@ def main():
             ax.set_yticks(np.arange(-LIM, LIM + 1, 15), minor=True)
             ax.grid(which='minor', color='white', lw=0.2, alpha=0.5)
             ax.tick_params(which='minor', length=0)
-            ax.set_title(f'{name}  {tag}  ({ns[name]:,} samples)', fontsize=13)
+            ax.set_title(f'{name}  {ROW_TAG[tag]}  ({ns[name]:,} samples)', fontsize=13)
             ax.set_xlabel('Yaw (deg)')
             ax.set_ylabel('Pitch (deg)')
             fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03,
                          label='density (% per bin)')
 
-    fig.suptitle('Gaze distribution — specific-face-model chain (canonical models) '
-                 '— top: CCS (normalized cam), bottom: HCS (head frame)', fontsize=13)
+    fig.suptitle('Gaze & head-pose distribution — specific-face-model chain '
+                 '(canonical models)  rows: CCS gaze / Head pose / HCS gaze',
+                 fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.97])
     out = _here / 'gaze_distribution_specific.png'
     fig.savefig(out, dpi=200)

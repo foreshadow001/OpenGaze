@@ -139,3 +139,45 @@ def canonicalize_face_model(P6):
     z = np.cross(x, y)           # 右手系：pitch/roll 零位由 x̂/ŷ 唯一确定
     R = np.stack([x, y, z])
     return (R @ (P6 - eye_c).T).T, R, eye_c
+
+
+HEAD_PITCH_OFFSET = -30.0
+"""标准模型姿态零位（2026-08-30 定稿）：标准系（true6/gen_xe6）模型的头姿
+pitch 读数统一减 30°——解缠绕后的 pitch 再加此偏移。"""
+
+
+def head_pose_angles(hR, is_true6=True):
+    """头姿 (pitch, yaw) 度数（2026-08-30 定稿，唯一实现）。
+
+    is_true6=True（标准系模型：true6 / gen_xe6）：
+      1) 后向解缠绕——arcsin 定义域 ±90°，真实 pitch>90°（后仰头）会折叠成
+         "pitch<90 + yaw 缠绕 ±180"；对后向样本（头前向 z>0）pitch 延伸至
+         ±180°、yaw 折回主域；
+      2) pitch += HEAD_PITCH_OFFSET（标准模型姿态定义为 −30°）。
+    is_true6=False（gen6 旧口径）：vector_to_angles 原样（含 ±90 折叠）。
+    """
+    v = hR @ np.array([0.0, 0.0, -1.0])
+    theta = np.degrees(np.arcsin(np.clip(-v[1], -1.0, 1.0)))
+    phi = np.degrees(np.arctan2(-v[0], -v[2]))
+    if not is_true6:
+        return theta, phi
+    if abs(phi) > 90:                       # 后向解缠绕
+        s = 1.0 if theta > 0 or (theta == 0 and phi > 0) else -1.0
+        theta = s * (180.0 - abs(theta))
+        phi = (180.0 - abs(phi)) * np.sign(phi)
+    return theta + HEAD_PITCH_OFFSET, phi
+
+
+def gaze_head_angles(model, rvec, tvec, gaze_point, K, is_true6=True):
+    """一次归一化同时得 (ccs(p,y), hcs(p,y), head(p,y)) 度数（纯几何，dummy 图）。
+
+    与各可视化/统计脚本统一调用口径；ccs/hcs 与 vector_to_angles 一致，
+    head 走 head_pose_angles（解缠绕 + 标准模型 −30° 零位，is_true6 开关）。
+    """
+    _, hr, gc = normalizeData_face(
+        np.zeros((32, 32, 3), np.uint8), model, rvec, tvec, gaze_point, K,
+        fixed_forward=False)[:3]
+    hR = cv2.Rodrigues(hr)[0]
+    return (np.degrees(vector_to_angles(gc.ravel())),
+            np.degrees(vector_to_angles((hR.T @ gc).ravel())),
+            head_pose_angles(hR, is_true6=is_true6))

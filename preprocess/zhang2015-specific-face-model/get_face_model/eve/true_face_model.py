@@ -4,7 +4,8 @@
   - 4 台相机（basler + webcam_l/c/r），官方外参 camera_transformation（4x4，
     Xc = R·Xw + t，跨 step 恒定已验证），内参逐相机 h5 camera_matrix，无畸变
   - 特征点在翻转/正立坐标系 h5（landmarks/<split>/<被试>.h5）
-  - 组门控：四相机齐全且 PoG validity 全真（缺一即弃，2026-08-30 定稿）
+  - 组门控：四相机齐全 + PoG validity 全真 + PoG 跨相机离散 ≤5px
+    （防标注时间错位；三项缺一即弃，2026-08-30 定稿）
 
 标准系与 xgaze 版一致（解剖轴定义，见 CLAUDE.md 约定 9）。
 
@@ -46,6 +47,7 @@ LM_ROOT = '/media/yanglinxuan/zyx/EVE_dataset/eve_dataset/landmarks'
 RAW_ROOT = '/media/yanglinxuan/zyx/EVE_dataset/eve_dataset'
 OUT_DIR = Path('/media/yanglinxuan/sfm/eve_specific_face_model/face_models')
 IDX6 = core.IDX6
+POG_SPREAD_MAX = 5.0    # 组门控：PoG 跨相机离散上限(px)，防标注时间错位（r=0.987 实证）
 GEN6 = None
 IDX6_ROWS = None
 
@@ -88,22 +90,37 @@ def process_subject(args):
         c, raw_f, si = int(ci_all[r]), int(fr_all[r]), int(st_all[r])
         sync_f = raw_f // 2 if c == 0 else raw_f
         sync_map.setdefault((sync_f, si), []).append((c, r, raw_f))
-    valid_cache = {}      # (step, cam) -> PoG validity 数组（懒加载）
-    def _valid(si, c, raw_f):
-        if (si, c) not in valid_cache:
+    anno_cache = {}       # (step, cam) -> (PoG validity, PoG data)（懒加载）
+    def _anno(si, c):
+        if (si, c) not in anno_cache:
             p = Path(RAW_ROOT) / subject / steps[si] / f'{cameras[c]}.h5'
-            valid_cache[(si, c)] = None if not p.is_file() else \
-                np.asarray(h5py.File(p, 'r')['face_PoG_tobii/validity'])
-        v = valid_cache[(si, c)]
-        return v is not None and raw_f < len(v) and bool(v[raw_f])
+            anno_cache[(si, c)] = None if not p.is_file() else tuple(
+                np.asarray(h5py.File(p, 'r')[k])
+                for k in ('face_PoG_tobii/validity', 'face_PoG_tobii/data'))
+        return anno_cache[(si, c)]
 
     aligned = []
     n_imgs = 0
+    stats = {'groups': 0, 'drop_cams': 0, 'drop_valid': 0, 'drop_spread': 0}
     for (sync_f, si), rows in sorted(sync_map.items()):
+        stats['groups'] += 1
         if set(c for c, _, _ in rows) != set(range(4)):
-            continue                      # 相机不齐，弃
-        if not all(_valid(si, c, raw_f) for c, _, raw_f in rows):
-            continue                      # 有相机 PoG 无效，弃
+            stats['drop_cams'] += 1        # 相机不齐，弃
+            continue
+        ann, ok = {}, True
+        for c, _, raw_f in rows:
+            a = _anno(si, c)
+            if a is None or raw_f >= len(a[0]) or not a[0][raw_f]:
+                ok = False
+                break
+            ann[c] = a[1][raw_f]
+        if not ok:
+            stats['drop_valid'] += 1       # 有相机 PoG 无效，弃
+            continue
+        P = np.stack([ann[c] for c in range(4)])
+        if np.max(np.linalg.norm(P - P.mean(0), axis=1)) > POG_SPREAD_MAX:
+            stats['drop_spread'] += 1      # PoG 跨相机离散超限（标注时间错位），弃
+            continue
         # 每相机只取一行（去重：同一相机可能有多行）
         seen = {}
         for c, r, raw_f in rows:
@@ -135,6 +152,7 @@ def process_subject(args):
     row = {'subject': subject, 'n_frames': len(aligned), 'n_imgs': n_imgs,
            'iod_model': float(np.linalg.norm(model[0] - model[3])),
            'nose_w_model': float(np.linalg.norm(model[4] - model[5]))}
+    row.update(stats)
     return row
 
 
@@ -161,6 +179,17 @@ def main():
              f'鼻宽 {np.mean([r["nose_w_model"] for r in rows]):.1f} mm '
              f'（{len(rows)} 被试；6 指标对比独立脚本 '
              f'metrics/eye_nose_features/gen6_vs_dlt.py）')
+    tg = sum(r['groups'] for r in rows)
+    log.info('组门控统计: 全部组 {:,} | 弃·相机不齐 {:,} ({:.1%}) | 弃·PoG无效 {:,} '
+             '({:.1%}) | 弃·PoG离散>{}px {:,} ({:.1%}) | 保留 {:,} ({:.1%})'.format(
+                 tg, sum(r['drop_cams'] for r in rows),
+                 sum(r['drop_cams'] for r in rows) / tg,
+                 sum(r['drop_valid'] for r in rows),
+                 sum(r['drop_valid'] for r in rows) / tg,
+                 int(POG_SPREAD_MAX), sum(r['drop_spread'] for r in rows),
+                 sum(r['drop_spread'] for r in rows) / tg,
+                 sum(r['n_frames'] for r in rows),
+                 sum(r['n_frames'] for r in rows) / tg))
 
 
 if __name__ == '__main__':

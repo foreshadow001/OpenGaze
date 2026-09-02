@@ -37,8 +37,8 @@ sys.path.insert(0, str(_PROJECT / 'preprocess/zhang2015-specific-face-model/get_
 
 import face_model_core as core
 from utils.logger import get_logger
-from utils.normalization import (estimateHeadPose, normalizeData_face,
-                                 vector_to_angles)
+from utils.normalization import (estimateHeadPose, head_pose_angles,
+                                 normalizeData_face, vector_to_angles)
 
 # 官方 GC 预处理器（dot→CCS→相机系唯一实现，避免手抄漂移）
 _gc_spec = importlib.util.spec_from_file_location(
@@ -218,7 +218,7 @@ def load_eve(rng):
             # 官方 PoG 直算：屏幕 px → 相机系 3D 注视点（dataset_report §4；
             # 各相机标注为同一 tobii 流按同步帧号分发，跨相机一致 ~0.04°）
             dummy = np.zeros((32, 32, 3), np.uint8)
-            gps, hs = {}, []
+            gps, hs, pog_px = {}, [], {}
             for c, r, raw_f, _ in rows_raw:
                 p_h5 = RAW / subj / step_name / f'{cameras[c]}.h5'
                 with h5py.File(p_h5, 'r') as f:
@@ -228,6 +228,7 @@ def load_eve(rng):
                     PoG = np.array(f['face_PoG_tobii/data'][raw_f])
                     mmpp = np.array(f['millimeters_per_pixel'], dtype=float)
                     T = np.array(f['camera_transformation'], dtype=float)
+                pog_px[c] = PoG
                 gp_c = (T @ np.array([PoG[0] * mmpp[0], PoG[1] * mmpp[1],
                                       0., 1.]))[:3].reshape(3, 1)
                 rv = cv2.Rodrigues(Rs[c] @ R_head)[0]
@@ -239,6 +240,9 @@ def load_eve(rng):
                 hs.append((cv2.Rodrigues(hr_c)[0].T @ gc_c).ravel())
             if set(gps) != set(range(4)):
                 continue     # 组门控：四相机齐全且 PoG 全有效，缺一即弃
+            P = np.stack([pog_px[c] for c in range(4)])
+            if np.max(np.linalg.norm(P - P.mean(0), axis=1)) > 5.0:
+                continue     # 组门控：PoG 跨相机离散超限 5px（标注时间错位）
             hv = np.array(hs); hv /= np.linalg.norm(hv, axis=1, keepdims=True)
             aa = np.degrees(np.arccos(np.clip(hv @ hv.T, -1, 1)))
             camd = aa[np.triu_indices(len(hv), 1)].max()
@@ -286,11 +290,18 @@ def load_gc(rng):
             dot = json.load(open(RAW / sess / 'dotInfo.json'))
             pos = {int(n.split('.')[0]): i for i, n in
                    enumerate(json.load(open(RAW / sess / 'frames.json')))}
+            # 官方质量门（2026-08-30）：appleFace/eye IsValid 全真
+            face = json.load(open(RAW / sess / 'appleFace.json'))
+            leye = json.load(open(RAW / sess / 'appleLeftEye.json'))
+            reye = json.load(open(RAW / sess / 'appleRightEye.json'))
         except Exception:
             continue
         pi = pos.get(fidx)
         if pi is None or dot['DotNum'][pi] == -1:
             continue
+        if not (face['IsValid'][pi] and leye['IsValid'][pi]
+                and reye['IsValid'][pi]):
+            continue                     # 官方四条件质量门（insightface 不查遮挡）
         w, h = (480, 640) if ori in (1, 2) else (640, 480)
         cal = CAL / f"{device.lower().replace(' ', '-')}_{w}x{h}.xml"
         if not cal.is_file():
@@ -387,7 +398,7 @@ def process_one(item):
     gc_hcs = hR.T @ gc_ccs
     fwd = np.array([0.0, 0.0, -1.0])
     return {'patch': img_w, 'id': sample_id,
-            'head': np.degrees(vector_to_angles(hR @ fwd)),
+            'head': head_pose_angles(hR, is_true6=True),
             'head_r': np.degrees(vector_to_angles(hR_raw @ fwd)),
             'ccs': np.degrees(vector_to_angles(gc_ccs.ravel())),
             'ccs_r': np.degrees(vector_to_angles(gc_raw)),

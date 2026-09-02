@@ -3,7 +3,17 @@
 与 `../xgaze/true_face_model.py` 同法（2026-08-29 定稿），差异在相机与帧同步：
 
 - **帧同步**：basler 与 webcam 帧率 2:1 → 同步帧号 = `basler_raw // 2`
-  （landmarks h5 按行存 (frame, cam, step)），仅保留 ≥3 相机齐全的同步组
+  （landmarks h5 按行存 (frame, cam, step)）
+- **组门控（2026-08-30 定稿）**：四相机齐全 + 各自 PoG validity 全真 +
+  **PoG 跨相机离散 ≤5px**，缺一即弃——实证：四相机标注为同一 tobii 流按各自
+  时间轴插值分发，webcam 时钟漂移使扫视瞬间各相机读到不同物理时刻
+  （PoG 离散 ↔ HCS 误差 Pearson r=0.987，~19px↔1°）；全量 252,164 组中
+  弃 2.4%（相机不齐）+ 19.5%（离散>5px），保留 78.2%。阈值决策留档
+  `metrics/frame_consistency/pog_spread_gate_stats.{csv,png}`；
+  离群案例归档 `metrics/frame_consistency/exception/`（四案：坏有效性 /
+  PoG 离散 376px / 20px 边界 19px / 5px 底线 7px，通用分析工具
+  `analyze_outlier.py`）。5px 门控后 true6 HCS 一致性 p95=0.12° / max=0.27°
+  （时间错位机制底线）
 - **DLT**：逐组全部相机——官方 `camera_transformation` 外参 + 逐相机
   `camera_matrix`（mp4 已去畸变，畸变取零），insightface 6 点 → 世界系 3D
 - **成模**：逐帧 Kabsch 对齐 gen6（消头运动）→ 帧间中位 = true6 →

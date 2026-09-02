@@ -4,7 +4,7 @@
 name: eve
 raw_data_dir: /media/yanglinxuan/zyx/EVE_dataset/eve_dataset
 output_dir: /media/yanglinxuan/sfm/eve_specific_224             # 输出（按 split 分目录，lzf）
-face_model_root: /media/yanglinxuan/ylx/eve_specific_face_model/face_models
+face_model_root: /media/yanglinxuan/sfm/eve_specific_face_model/face_models
 landmarks_dir: /media/yanglinxuan/zyx/EVE_dataset/eve_dataset/landmarks   # 必填（按 split 分目录）
 cameras: [basler, webcam_l, webcam_c, webcam_r]   # 四相机全用，同一时刻四视角
 target_hz: 5            # 采样率：interval = round(fps/target_hz)

@@ -1,6 +1,7 @@
 """EVE 3D 位置与头姿(HCS gaze) 跨相机一致性（2026-08-30，仿 xgaze 版）
 
-组门控（2026-08-30 定稿）：四相机齐全且各自 PoG validity 全真，缺一即弃。
+组门控（2026-08-30 定稿）：四相机齐全 + 各自 PoG validity 全真 + PoG 跨相机
+离散 ≤5px（防标注时间错位，r=0.987 实证；2026-08-30 由 20px 收紧），缺一即弃；日志展示排除量。
 4 台相机无法做两组互验 DLT（2+2 基线太弱），故与 xgaze 版差异：
 - gen6 臂：逐相机独立 PnP（v1 形态）→ 3D 位置（官方外参转世界系）+ HCS；
 - true6 臂：**4 台一组** DLT → Kabsch(true6) 共享头姿（v2 部署形态）→ 仅 HCS
@@ -11,7 +12,8 @@ face_PoG_tobii 屏幕像素 → ×millimeters_per_pixel → camera_transformatio
 → 该相机系注视点 3D 坐标（各相机标注为同一 tobii 流按同步帧号分发，
 跨相机一致 ~0.04°）。
 
-中间值缓存 pos_hcs_cache.npz（逐对原始值 + 相机/被试标签）：
+中间值缓存 pos_hcs_cache.npz（逐对原始值 + 相机/被试标签 + 定位三元组
+（被试名, step 序号, 同步帧号），直接回溯原始数据）：
 命中则跳过采样直接出 CSV/图；POS_HCS_REFRESH=1 强制重采。
 
 输出（本目录，无 md）:
@@ -49,6 +51,7 @@ FM_DIR = Path('/media/yanglinxuan/sfm/eve_specific_face_model/face_models')
 N_FRAMES = 120
 DUMMY = np.zeros((32, 32, 3), np.uint8)
 REF_CAM = 0                       # basler，固定参考
+POG_SPREAD_MAX = 5.0             # 组门控：PoG 跨相机离散上限(px)
 CACHE = HERE / 'pos_hcs_cache.npz'
 
 
@@ -62,6 +65,10 @@ def sample():
                 for p in sorted(LM_ROOT.joinpath(sp).glob('*.h5'))]
     P_g, H_g, H_t = [], [], []
     cam_g, cam_t, subj_g, subj_t, n_frames = [], [], [], [], []
+    stats = [0, 0, 0, 0]   # [弃·总, 弃·相机/PoG无效, 弃·离散超限, 采样组数]
+    # 定位三元组：每对记录 (被试名, step 序号, 同步帧号)，快速回溯原始数据
+    tri_g, tri_t = [], []          # gen6 臂 / true6 臂
+    spread_g, spread_t = [], []    # 组级 PoG 离散(px) 随对记录
     for sp, subj in tqdm(subjects, desc='subjects', unit='subj'):
         mpath = FM_DIR / subj / 'true6.txt'
         if not mpath.is_file():
@@ -108,7 +115,7 @@ def sample():
             rows_raw = groups[gi]
             step_name = steps[rows_raw[0][3]]
             # 逐相机官方 PoG（各自 raw_f）：屏幕 px → 相机系 3D 注视点（§4 公式）
-            gp_cam = {}
+            gp_cam, pog_px = {}, {}
             for c, r, raw_f, _ in rows_raw:
                 p_h5 = RAW_ROOT / subj / step_name / f'{cameras[c]}.h5'
                 if not p_h5.is_file():
@@ -120,10 +127,17 @@ def sample():
                     PoG = np.array(f['face_PoG_tobii/data'][raw_f])
                     mmpp = np.array(f['millimeters_per_pixel'], dtype=float)
                     T = np.array(f['camera_transformation'], dtype=float)
+                pog_px[c] = PoG
                 gp_cam[c] = (T @ np.array(
                     [PoG[0] * mmpp[0], PoG[1] * mmpp[1], 0., 1.]))[:3].reshape(3, 1)
             if set(gp_cam) != set(range(4)):
-                continue     # 组门控：四相机齐全且 PoG 全有效，缺一即弃
+                stats[0] += 1; stats[1] += 1     # 弃：相机不齐/PoG 无效
+                continue
+            P = np.stack([pog_px[c] for c in range(4)])
+            grp_spread = float(np.max(np.linalg.norm(P - P.mean(0), axis=1)))
+            if grp_spread > POG_SPREAD_MAX:
+                stats[0] += 1; stats[2] += 1     # 弃：PoG 离散超限（时间错位）
+                continue
 
             # ---- gen6 臂：逐相机 PnP → 世界系 3D + HCS ----
             Xws, HCSg = {}, {}
@@ -156,6 +170,9 @@ def sample():
                     H_g.append(float(np.degrees(np.arccos(cos))))
                     cam_g.append(c)
                     subj_g.append(si)
+                    spread_g.append(grp_spread)
+                    tri_g.append((subj, rows_raw[0][3], int(
+                        next(k[0] for k, v in sync_map.items() if v is rows_raw))))
 
             # ---- true6 臂：4 台一组 DLT → Kabsch(true6) 共享头姿 → HCS ----
             rays, pv = [], []
@@ -194,7 +211,11 @@ def sample():
                     H_t.append(float(np.degrees(np.arccos(cos))))
                     cam_t.append(c)
                     subj_t.append(si)
+                    spread_t.append(grp_spread)
+                    tri_t.append((subj, rows_raw[0][3], int(
+                        next(k[0] for k, v in sync_map.items() if v is rows_raw))))
         n_frames.append((subj, n_used))
+        stats[3] += len(idx)
 
     np.savez(CACHE,
              pos3d_gen6=np.array(P_g), hcs_gen6=np.array(H_g),
@@ -202,8 +223,14 @@ def sample():
              cam_t=np.array(cam_t), subj_g=np.array(subj_g),
              subj_t=np.array(subj_t),
              subj_names=np.array([n for n, _ in n_frames]),
-             n_frames=np.array([n for _, n in n_frames]))
-    log.info(f'缓存写入 {CACHE.name}（{len(H_t):,} 对）')
+             n_frames=np.array([n for _, n in n_frames]),
+             tri_g=np.array(tri_g, dtype=object),
+             tri_t=np.array(tri_t, dtype=object),
+             spread_g=np.array(spread_g), spread_t=np.array(spread_t))
+    log.info(f'缓存写入 {CACHE.name}（{len(H_t):,} 对）| 组门控: 采样 {stats[3]:,} | '
+             f'弃·相机/PoG无效 {stats[1]:,} ({stats[1]/max(stats[3],1):.1%}) | '
+             f'弃·PoG离散>{POG_SPREAD_MAX:g}px {stats[2]:,} '
+             f'({stats[2]/max(stats[3],1):.1%}) | 保留 {stats[3]-stats[0]:,}')
 
 
 def main():

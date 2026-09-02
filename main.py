@@ -220,8 +220,12 @@ def run_test(args):
         # 跨数据集评测：用指定数据集的配置替换 dataset 段
         log.info(f'[*] 跨数据集评测: 模型来自 {args.exp}'
                  f'（训练于 {snapshot_dataset}），测试于 {args.dataset}')
+        if snapshot.dataset_config.split("/")[-1] == "mpiifacegaze":
+            args.run = "all"
         snapshot.dataset, _ = load_dataset_config(args.dataset)
         snapshot.dataset_config = args.dataset
+        if args.dataset.split('/')[-1] == "mpiifacegaze":
+            snapshot.dataset.split.mode = "all_subjects"
     if args.set:
         # 测试时的临时覆盖（如 dataset.split.mode=all_subjects），不写回快照
         apply_overrides(snapshot, args.set)
@@ -235,7 +239,37 @@ def run_test(args):
         if not os.path.exists(ckpt_path):
             raise SystemExit(f'checkpoint 不存在: {ckpt_path}')
     else:
+        # 协议 epoch（CLAUDE.md 约定 8）：从实验快照的 dataset_config 路径
+        # 读原始数据集 yaml 的 train.epochs / epochs_by_method，加载
+        # epoch_(N-1)_ckpt.pth（恰好训练 N epoch 时即最后一个；旧实验
+        # 多训时取协议位而非最新）。--ckpt 显式指定时不覆盖。
         ckpt_path = find_latest_ckpt(exp_dir, args.run)
+        try:
+            import yaml as _yaml
+            snap_file = os.path.join(exp_dir, args.run, 'config.yaml') \
+                if args.run else os.path.join(exp_dir, 'config.yaml')
+            snap = _yaml.safe_load(open(snap_file))
+            ds_cfg_path = snap.get('dataset_config', '')    # 如 zhang2015-insightface/xgaze
+            method_name = snap.get('method_config', '')      # 如 resnet50
+            if ds_cfg_path:
+                ds_yaml = _yaml.safe_load(
+                    open(os.path.join('configs/datasets', ds_cfg_path + '.yaml')))
+                by_m = (ds_yaml.get('train', {}).get('epochs_by_method') or {})
+                protocol_ep = by_m.get(method_name) or \
+                    ds_yaml.get('train', {}).get('epochs')
+                if protocol_ep:
+                    target = os.path.join(
+                        exp_dir, args.run or '', 'ckpt',
+                        f'epoch_{int(protocol_ep) - 1}_ckpt.pth')
+                    if os.path.exists(target):
+                        ckpt_path = target
+                        log.info(f'协议 epoch={int(protocol_ep)} '
+                                 f'({ds_cfg_path})，加载 {os.path.basename(target)}')
+                    else:
+                        log.warning(f'协议 epoch={protocol_ep} 的 ckpt 不存在，'
+                                    f'回退最新 {os.path.basename(ckpt_path)}')
+        except Exception as e:
+            log.warning(f'协议 epoch 解析失败（{e}），使用最新 ckpt')
 
     # 测试日志同样追加写入该（子）运行的 run.log，保证溯源完整
     log_dir = os.path.join(exp_dir, args.run, 'logs') if args.run \

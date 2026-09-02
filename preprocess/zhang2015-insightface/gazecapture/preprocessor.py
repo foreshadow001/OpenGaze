@@ -146,6 +146,11 @@ class GazeCapturePreprocessor:
             frames_list = json.load(open(rec_dir / 'frames.json'))
             dot = json.load(open(rec_dir / 'dotInfo.json'))
             device = json.load(open(rec_dir / 'info.json'))['DeviceName']
+            # 官方质量门（2026-08-30 定稿）：appleFace/eye IsValid 全真——
+            # insightface 在遮挡时也检出人脸，用官方 iTracker 检测有效性把关
+            face_valid = json.load(open(rec_dir / 'appleFace.json'))['IsValid']
+            leye_valid = json.load(open(rec_dir / 'appleLeftEye.json'))['IsValid']
+            reye_valid = json.load(open(rec_dir / 'appleRightEye.json'))['IsValid']
         except Exception as e:
             recorder.add(session, '<session>', f'error:{type(e).__name__}:{e}')
             return 0
@@ -253,6 +258,11 @@ class GazeCapturePreprocessor:
                 ccs_x, ccs_y = _dot_to_ccs_mm(ori, xcam, ycam)
                 if ccs_y <= 0:
                     recorder.add(session, frame_name, 'invalid_dot')  # 朝向过渡帧噪声
+                    pbar.update(1)
+                    continue
+                if not (face_valid[pos] and leye_valid[pos]
+                        and reye_valid[pos]):
+                    recorder.add(session, frame_name, 'apple_invalid')
                     pbar.update(1)
                     continue
 
