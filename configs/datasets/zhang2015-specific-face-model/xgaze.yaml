@@ -5,7 +5,7 @@
 # 官方预处理版 xgaze_224（zyx 盘）仅作参考对照，训练/评测一律用本自预处理版
 # ===== 第二版（specific-face-model）对照配置：数据来自 sfm 盘 /media/yanglinxuan/sfm/xgaze_specific_224 =====
 name: xgaze
-data_dir: /media/yanglinxuan/sfm/xgaze_specific_224
+data_dir: /data/others_preprocessed_datasets/xgaze_specific_224
 
 split:
   train:

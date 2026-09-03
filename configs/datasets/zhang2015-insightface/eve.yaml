@@ -3,7 +3,7 @@
 # 划分依据与全部决策见 preprocess/zhang2015-insightface/eve/dataset_report.md（§5/§8）
 # 预处理配置 configs/preprocess/eve.yaml 的 splits 与本文件一致
 name: eve
-data_dir: /media/yanglinxuan/ylx/eve_insightface_224
+data_dir: /data/others_preprocessed_datasets/eve_insightface_224
 
 split:
   train:

@@ -34,13 +34,13 @@ def run(config, recorder: FailureRecorder):
     v2_dir = Path(config.v2_dir)
     raw = Path(config.raw_data_dir)
     out_dir = Path(config.output_dir)
-    splits = config.splits if isinstance(config.splits, dict) \
-        else {'train': None, 'test': None}
+    sp = config.splits                     # yaml_to_ns 后为 namespace，转 dict 统一
+    splits = sp if isinstance(sp, dict) else vars(sp)
     out_dir.mkdir(parents=True, exist_ok=True)
     log.info('v3 EVE: fixed_forward=True (roll-only), world = basler cam')
 
     for split, subjects in splits.items():
-        sel = list(subjects)
+        sel = list(subjects or [])
         override = getattr(config, 'subjects', None)
         if override:
             sel = [s for s in sel if s in override]   # 与本 split 名单求交

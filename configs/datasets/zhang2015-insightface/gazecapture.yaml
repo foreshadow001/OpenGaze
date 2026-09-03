@@ -6,7 +6,7 @@
 # 筛选后的 session 列表在 configs/splits/gazecapture_faze.yaml（按预处理产物帧数生成，
 # 见其头注释）；官方全量划分 gazecapture_sessions.yaml 仅供预处理使用。
 name: gazecapture
-data_dir: /media/yanglinxuan/ylx/gazecapture_insightface_224
+data_dir: /data/others_preprocessed_datasets/gazecapture_insightface_224
 
 split:
   train:

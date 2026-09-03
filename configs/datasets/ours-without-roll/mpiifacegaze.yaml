@@ -6,7 +6,7 @@
 
 label: ccs
 name: mpiifacegaze
-data_dir: /media/yanglinxuan/sfm/mpiifacegaze_noroll_224
+data_dir: /data/others_preprocessed_datasets/mpiifacegaze_noroll_224
 
 split:
   mode: leave_one_out

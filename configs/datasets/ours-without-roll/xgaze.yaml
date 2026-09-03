@@ -6,7 +6,7 @@
 
 label: ccs
 name: xgaze
-data_dir: /media/yanglinxuan/sfm/xgaze_noroll_224
+data_dir: /data/others_preprocessed_datasets/xgaze_noroll_224
 
 split:
   train:

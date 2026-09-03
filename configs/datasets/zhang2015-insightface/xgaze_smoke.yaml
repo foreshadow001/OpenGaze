@@ -2,7 +2,7 @@
 # 1 个被试抽 10 帧训练，另一被试抽 10 帧测试（快速端到端验证用，不作正式实验）
 # 数据源与正式 xgaze.yaml 一致（insightface 管线，h5 在 data_dir 根目录）
 name: xgaze
-data_dir: /media/yanglinxuan/ylx/xgaze_insightface_224
+data_dir: /data/others_preprocessed_datasets/xgaze_insightface_224
 
 split:
   train:

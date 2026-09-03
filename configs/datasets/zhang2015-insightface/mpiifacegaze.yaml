@@ -6,7 +6,7 @@
 #                  也是 cross-dataset 的源训练 / 目标测试协议
 #                  （--set dataset.split.mode=all_subjects）
 name: mpiifacegaze
-data_dir: /media/yanglinxuan/ylx/mpiifacegaze_insightface_224
+data_dir: /data/others_preprocessed_datasets/mpiifacegaze_insightface_224
 
 split:
   mode: leave_one_out

@@ -8,7 +8,7 @@
 # 见其头注释）；官方全量划分 gazecapture_sessions.yaml 仅供预处理使用。
 # ===== 第二版（specific-face-model）对照配置：数据来自 sfm 盘 /media/yanglinxuan/sfm/gazecapture_specific_224 =====
 name: gazecapture
-data_dir: /media/yanglinxuan/sfm/gazecapture_specific_224
+data_dir: /data/others_preprocessed_datasets/gazecapture_specific_224
 
 split:
   train:

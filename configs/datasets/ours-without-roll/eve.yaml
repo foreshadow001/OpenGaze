@@ -6,7 +6,7 @@
 
 label: ccs
 name: eve
-data_dir: /media/yanglinxuan/sfm/eve_noroll_224
+data_dir: /data/others_preprocessed_datasets/eve_noroll_224
 
 split:
   train:

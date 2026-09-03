@@ -4,7 +4,7 @@
 # 划分来源：ETH-XGaze 官方 train_test_split.json（已并入本文件）
 # 官方预处理版 xgaze_224（zyx 盘）仅作参考对照，训练/评测一律用本自预处理版
 name: xgaze
-data_dir: /media/yanglinxuan/ylx/xgaze_insightface_224
+data_dir: /data/others_preprocessed_datasets/xgaze_insightface_224
 
 split:
   train:

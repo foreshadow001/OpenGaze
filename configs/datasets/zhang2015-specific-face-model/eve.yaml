@@ -4,7 +4,7 @@
 # 预处理配置 configs/preprocess/eve.yaml 的 splits 与本文件一致
 # ===== 第二版（specific-face-model）对照配置：数据来自 sfm 盘 /media/yanglinxuan/sfm/eve_specific_224 =====
 name: eve
-data_dir: /media/yanglinxuan/sfm/eve_specific_224
+data_dir: /data/others_preprocessed_datasets/eve_specific_224
 
 split:
   train:

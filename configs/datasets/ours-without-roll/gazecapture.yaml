@@ -6,7 +6,7 @@
 
 label: ccs
 name: gazecapture
-data_dir: /media/yanglinxuan/sfm/gazecapture_noroll_224
+data_dir: /data/others_preprocessed_datasets/gazecapture_noroll_224
 
 split:
   train:

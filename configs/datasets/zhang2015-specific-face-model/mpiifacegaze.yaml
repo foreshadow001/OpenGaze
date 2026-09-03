@@ -7,7 +7,7 @@
 #                  （--set dataset.split.mode=all_subjects）
 # ===== 第二版（specific-face-model）对照配置：数据来自 sfm 盘 /media/yanglinxuan/sfm/mpiifacegaze_specific_224 =====
 name: mpiifacegaze
-data_dir: /media/yanglinxuan/sfm/mpiifacegaze_specific_224
+data_dir: /data/others_preprocessed_datasets/mpiifacegaze_specific_224
 
 split:
   mode: leave_one_out
