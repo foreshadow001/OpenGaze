@@ -96,7 +96,7 @@ def run(config, recorder):
             'cam_index': h5.create_dataset('cam_index', (n, 1), np.int32,
                                            chunks=(BATCH_SIZE, 1), maxshape=(None, 1)),
             'face_patch': h5.create_dataset('face_patch', (n, 224, 224, 3), np.uint8,
-                                            chunks=(BATCH_SIZE, 224, 224, 3),
+                                            chunks=(1, 224, 224, 3),   # 逐样本 chunk（批量 chunk 随机读放大 50 倍，2026-09-03）
                                             maxshape=(None, 224, 224, 3),
                                             compression='lzf'),
             'face_mat_norm': h5.create_dataset('face_mat_norm', (n, 3, 3), float,

@@ -74,7 +74,7 @@ def _subject(recorder, v2_dir, raw, out_dir, subj, max_rows):
                                          h5py.special_dtype(vlen=str),
                                          chunks=(BATCH_SIZE,), maxshape=(None,)),
         'face_patch': out.create_dataset('face_patch', (n_est, 224, 224, 3), np.uint8,
-                                         chunks=(BATCH_SIZE, 224, 224, 3),
+                                         chunks=(1, 224, 224, 3),   # 逐样本 chunk（批量 chunk 随机读放大 50 倍，2026-09-03）
                                          maxshape=(None, 224, 224, 3), compression='lzf'),
         'face_mat_norm': out.create_dataset('face_mat_norm', (n_est, 3, 3), float,
                                             chunks=(BATCH_SIZE, 3, 3), maxshape=(None, 3, 3)),
