@@ -9,29 +9,26 @@
 Gaze/
 ├── configs/
 │   ├── common.yaml                   # 平台公共配置（gpus 用卡列表，脚本与 main.py 共享）
-│   ├── datasets/                     # 数据集配置：数据位置、划分方式、加载参数
-│   │   └── zhang2015-insightface/    #   按预处理管线分文件夹（--dataset 传「管线/数据集」）
-│   │       ├── xgaze.yaml
-│   │       ├── xgaze_smoke.yaml
-│   │       ├── mpiifacegaze.yaml
-│   │       ├── gazecapture.yaml      #     session 列表引用 splits/ 官方划分
-│   │       └── eve.yaml
+│   ├── datasets/                     # 数据集配置：数据位置、划分方式、加载参数、label(ccs|hcs)
+│   │   ├── zhang2015-insightface/    #   按预处理管线分文件夹（--dataset 传「管线/数据集」）
+│   │   │   ├── xgaze.yaml / xgaze_smoke.yaml / mpiifacegaze.yaml / gazecapture.yaml / eve.yaml
+│   │   ├── zhang2015-specific-face-model/   #   v2 四数据集（data_dir → /data 副本）
+│   │   └── ours-without-roll/        #   v3 四数据集（label 字段 + --label 覆盖随快照留档）
 │   ├── methods/                      # 方法配置：模型结构 + 训练策略
 │   │   ├── resnet18.yaml
 │   │   └── resnet50.yaml
 │   ├── preprocess/                   # 预处理配置（输入输出路径、被试列表、线程数）
-│   │   └── zhang2015-insightface/    #   同样按预处理管线分文件夹
-│   │       ├── xgaze.yaml            #     xgaze 特有：annotation_dir / calib_dir / sub_folder
-│   │       ├── mpiifacegaze.yaml
-│   │       ├── gazecapture.yaml      #     引用 splits/ 下的官方 session 级划分
-│   │       └── eve.yaml
+│   │   ├── zhang2015-insightface/    #   同样按预处理管线分文件夹（v1）
+│   │   ├── zhang2015-specific-face-model/   #   v2（face_model_root / landmarks_dir）
+│   │   └── ours-without-roll/        #   v3（v2_dir 指向 v2 产物 = 索引与几何真源）
 │   └── splits/                       # 数据集官方划分（独立共享：预处理与训练配置都引用）
 │       ├── gazecapture_sessions.yaml #   GazeCapture 官方全量：train 1321（含 val）/ test 150 + excluded 3（预处理用）
 │       └── gazecapture_faze.yaml     #   GazeCapture FAZE 式被试筛选：train ≥500 帧 → 1069 / test ≥1000 帧 → 123（训练用）
 │
 ├── datasets/                         # 数据集加载（统一 h5 格式）
 │   ├── __init__.py                   #   build_train_loader / build_test_loader 工厂
-│   ├── base.py                       #   GazeH5Dataset：统一 h5 读取基类（懒加载 + swmr）
+│   ├── base.py                       #   GazeH5Dataset：统一 h5 读取基类（懒加载 + swmr；
+│   │                                #     label_field_of 按 dataset.label 选 face_gaze / face_gaze_hcs）
 │   ├── xgaze.py                      #   ETH-XGaze：按配置 split 段读取（官方数据已是 h5，直接兼容）
 │   ├── mpiifacegaze.py               #   leave_one_out / all_subjects 两种 split 模式
 │   ├── gazecapture.py                #   session 列表从 configs/splits/ 读（官方 train/test，无 LOO）
@@ -50,11 +47,17 @@ Gaze/
 │
 ├── preprocess/                       # 预处理（管线脚本目录名含连字符，由 preprocess.py 按路径加载）
 │   ├── common.py                     #   FailureRecorder 失败样本记录 + 运行目录/日志
-│   ├── zhang2015-insightface/        #   管线：Zhang2015 归一化 + insightface 106 点 PnP
-│   │   ├── normalize_xgaze.py        #     XGazePreprocessor 类（FLIP/EXCLUDE 相机表、face model 独立配置加载）
-│   │   ├── normalize_mpiifacegaze.py #     MPIIFaceGaze（同管线，独立常量）
-│   │   ├── gazecapture/              #     GazeCapture 预处理（目录包形式，骨架待实现）
-│   │   └── face_model_xgaze.txt      #     3D face model 数据
+│   ├── zhang2015-insightface/        #   v1 管线：Zhang2015 归一化 + insightface 106 点 PnP
+│   │   ├── normalize_{xgaze,mpiifacegaze}.py / gazecapture/ / eve/ / extract_landmarks.py
+│   │   └── face_model_xgaze.txt
+│   ├── zhang2015-specific-face-model/       #   v2 管线：true6_canonical/gen_xe6 + DLT/PnP
+│   │   ├── normalize_{xgaze,eve,gazecapture,mpiifacegaze}.py / normalization_protocol.md
+│   │   └── get_face_model/                  #     逐人真实模型（多相机 DLT 三角化）
+│   └── ours-without-roll/            #   v3 管线：fixed_forward=True roll-only 归一化
+│       ├── v3_core.py                #     共享恢复链（Kabsch(face_landmarks_3d)+matn^T·unit(gaze)）
+│       ├── normalize_{xgaze,eve,gazecapture,mpiifacegaze}.py / normalization_protocol.md
+│       ├── repack_chunks.py          #     存量 face_patch chunk 修复工具（(50,..)→(1,..)）
+│       └── viz/                      #     sample_all_datasets（与 v2 同源采样）+ distribution/
 │   └── log/                          #   每次预处理一个目录（run.log + failures.json，gitignore）
 │
 ├── trainers/
@@ -64,11 +67,10 @@ Gaze/
 ├── scripts/                          # 运行脚本
 │   ├── common.sh                     #   公共函数：python 路径、latest_exp、require_exp 校验、
 │   │                                #   py() 启动器（卡列表读 configs/common.yaml 的 gpus；多卡 torchrun、单卡直接 python）
-│   └── zhang2015-insightface/        #   一级 = 预处理管线，二级 = 方法（method）
-│       ├── resnet18/                 #   结构与方法一一对应
-│       │   ├── within-dataset/       #     每数据集一个：训练+测试一条龙（训练多卡、测试单卡）
-│       │   └── cross-dataset/        #     n(n-1) 个 A→B 评测（REUSE_EXP 指定）；all.sh 按源 <大写名>_EXP
-│       └── resnet50/                 #   同上
+│   ├── zhang2015-insightface|zhang2015-specific-face-model/   # 一级 = 预处理管线，二级 = 方法
+│   │   └── resnet18|resnet50/{within-dataset, cross-dataset}/ # within 一条龙；cross 需 REUSE_EXP
+│   └── ours-without-roll-hcs|ccs/    #   v3 按标签分两套（内置 --label；LOO 复用按「数据集×方法×label」匹配）
+│       └── resnet18|resnet50/{within-dataset, cross-dataset}/
 │
 ├── main.py                           # 训练/测试入口：python main.py --dataset zhang2015-insightface/xgaze --method resnet50
 ├── preprocess.py                     # 预处理入口：python preprocess.py --dataset mpiifacegaze --method zhang2015-insightface
@@ -289,8 +291,9 @@ pip install -e .
 
 ## 5. 实施阶段
 
-1. **框架搭建**：分包迁移、yaml 配置系统、`utils/logger.py` 实验目录与分级日志管理、trainer 重构、ckpt v1 标准与断点续训；已用 ETH-XGaze 冒烟验证（1 被试 10 帧：训练→续训→测试）✅
-2. **MPIIFaceGaze**：数据已预处理为统一 h5（`mpiifacegaze_insightface_224`，见 `~/data-preprocessing-gaze/normalize_mpiifacegaze_h5.py`）；LOO 15 折 + 全量配置与脚本已接入，冒烟验证通过 ✅（全量训练待跑）
-3. **GazeCapture**：预处理脚本（jpg + json → h5，官方 train/val/test 划分）→ 训练 + 测试
-4. **EVE**：预处理脚本（视频帧抽帧 + 标注 → h5）→ 训练 + 测试
-5. **跨数据集评测**：train on A / test on B 评测矩阵，验证平台通用性
+1. **框架搭建**：分包迁移、yaml 配置系统、`utils/logger.py` 实验目录与分级日志管理、trainer 重构、ckpt v1 标准与断点续训；ETH-XGaze 冒烟验证（训练→续训→测试）✅
+2. **MPIIFaceGaze**：v1 预处理 + LOO 15 折 + 全量训练/评测 ✅
+3. **GazeCapture**：v1 预处理（dot→CCS 官方链 + 质量门）+ FAZE 协议训练/评测 ✅
+4. **EVE**：v1 预处理（4 相机 5Hz + PoG 直算 + 组门控）+ 训练/评测 ✅
+5. **跨数据集评测**：v1 全矩阵 ✅；v2（specific-face-model）四数据集训练 + 跨数据集 ✅
+6. **v3（ours-without-roll）**：roll-only 预处理（从 v2 产物恢复几何）+ `--label ccs|hcs` 双标签训练接入 + 四数据集训练/评测 ✅（协议见 `preprocess/ours-without-roll/normalization_protocol.md`）

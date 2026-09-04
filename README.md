@@ -4,14 +4,22 @@
 
 ## 支持的数据集
 
-| 数据集 | 状态 | 划分协议 | 数据（zhang2015-insightface 管线产物） |
-| --- | --- | --- | --- |
-| ETH-XGaze | ✅ 已接入 | 80 被试自划分 75 train / 5 test（官方 test 无公开标注） | `xgaze_insightface_224`（官方预处理版仅参考） |
-| MPIIFaceGaze | ✅ 已接入 | leave-one-out 15 折 + 15 人全量（`--set dataset.split.mode` 切换） | `mpiifacegaze_insightface_224` |
-| EVE | ✅ 已接入 | train01–39 训练 / 官方 val01–05 为平台 test（官方 test 无 Tobii 标注） | `eve_insightface_224` |
-| GazeCapture | ✅ 已接入 | FAZE 式被试筛选（全帧、无 few-shot）：train 样本 ≥500 → 1069 session / 1.94M 帧；test 样本 ≥1000 → 123 session / 260k 帧 | `gazecapture_insightface_224` |
+| 数据集 | 状态 | 划分协议 |
+| --- | --- | --- |
+| ETH-XGaze | ✅ 已接入 | 80 被试自划分 75 train / 5 test（官方 test 无公开标注） |
+| MPIIFaceGaze | ✅ 已接入 | leave-one-out 15 折 + 15 人全量（`--set dataset.split.mode` 切换） |
+| EVE | ✅ 已接入 | train01–39 训练 / 官方 val01–05 为平台 test（官方 test 无 Tobii 标注） |
+| GazeCapture | ✅ 已接入 | FAZE 式被试筛选（全帧、无 few-shot）：train 样本 ≥500 → 1069 session / 1.94M 帧；test 样本 ≥1000 → 123 session / 260k 帧 |
 
-所有数据集预处理为统一 h5：`face_patch (N,224,224,3) uint8` + `face_gaze (N,2) (pitch,yaw) 弧度`，BGR 存储、加载时统一翻转。
+### 预处理管线（三版，`--dataset` 传「管线/数据集」）
+
+| 管线 | 归一化 | 产物 | 协议文档 |
+| --- | --- | --- | --- |
+| `zhang2015-insightface`（v1） | Zhang2015 虚拟相机（消头姿）+ insightface PnP | `<ds>_insightface_224` | — |
+| `zhang2015-specific-face-model`（v2） | 同 v1 归一化；xgaze/EVE 逐人 true6_canonical + DLT 头姿，GC/MPII gen_xe6 + PnP | `<ds>_specific_224` | [normalization_protocol.md](preprocess/zhang2015-specific-face-model/normalization_protocol.md) |
+| `ours-without-roll`（v3） | **fixed_forward=True roll-only**（头姿 pitch/yaw 保留在 patch、roll=0）；几何从 v2 产物精确恢复，无 DLT/PnP | `<ds>_noroll_224` | [normalization_protocol.md](preprocess/ours-without-roll/normalization_protocol.md) |
+
+所有数据集预处理为统一 h5：`face_patch (N,224,224,3) uint8` + `face_gaze (N,2) (pitch,yaw) 弧度`（v2/v3 另有 `face_gaze_hcs` 头架系标签），BGR 存储、加载时统一翻转，face_patch 逐样本 chunk。**训练读取统一走 `/data/others_preprocessed_datasets/`（NVMe，十二套 v1/v2/v3 副本）；ylx/sfm 盘为预处理写出与正本**。
 
 ## 项目结构
 
@@ -19,18 +27,19 @@
 OpenGaze/
 ├── configs/
 │   ├── common.yaml                    # 平台公共配置（gpus 用卡列表）
-│   ├── datasets/zhang2015-insightface/  # 数据集配置（按预处理管线分文件夹）
+│   ├── datasets/                      # 数据集配置（按预处理管线分文件夹：zhang2015-insightface /
+│   │                                  #   zhang2015-specific-face-model / ours-without-roll，含 label 字段）
 │   ├── methods/                       # 方法配置：resnet18 / resnet50
-│   ├── preprocess/zhang2015-insightface/  # 预处理配置（同按管线分文件夹）
+│   ├── preprocess/                    # 预处理配置（同按管线分文件夹）
 │   └── splits/                        # 官方/筛选划分（GazeCapture 两份：全量预处理用 + FAZE 筛选训练用）
 ├── scripts/
 │   ├── common.sh                      # python 路径、latest_exp / require_exp 校验、py() 多卡启动器
-│   └── zhang2015-insightface/         # 一级 = 预处理管线，二级 = 方法
-│       └── resnet18|resnet50/
-│           ├── within-dataset/        # 每数据集一个：训练+测试一条龙（新开实验）
-│           └── cross-dataset/         # n(n-1) 个 A→B 评测（REUSE_EXP 指定）+ all.sh
-├── datasets/                          # 四数据集 loader + 统一 h5 基类 + 工厂
-├── preprocess/                        # 预处理管线（zhang2015-insightface / zhang2015-specific-face-model）
+│   ├── zhang2015-insightface|zhang2015-specific-face-model/   # 一级 = 预处理管线，二级 = 方法
+│   │   └── resnet18|resnet50/{within-dataset,cross-dataset}/
+│   └── ours-without-roll-hcs|ccs/     # v3 按标签分两套（内置 --label），结构同上
+├── datasets/                          # 四数据集 loader + 统一 h5 基类（label_field_of 选 ccs/hcs）+ 工厂
+├── preprocess/                        # 预处理管线（zhang2015-insightface / zhang2015-specific-face-model /
+│                                      #   ours-without-roll + repack_chunks.py 存量修复工具）
 ├── models/                            # GazeNet（backbone + FC，ResNet 骨干）
 ├── trainers/                          # 训练器（DDP 封装、训练/评测循环、checkpoint 管理）
 ├── utils/                             # yaml 配置、实验目录 logger、指标
@@ -63,6 +72,9 @@ python main.py --dataset zhang2015-insightface/xgaze --method resnet50 --set met
 
 # 冒烟测试（1 被试 10 帧，验证管线）
 python main.py --dataset zhang2015-insightface/xgaze_smoke --method resnet50 --set method.train.epochs=2
+
+# v3 管线 + 头架系标签训练（--label ccs|hcs，默认 ccs；快照留档、测试/跨数据集自动沿用）
+python main.py --dataset ours-without-roll/mpiifacegaze --method resnet18 --label hcs
 ```
 
 也可以用 `scripts/` 下的脚本：
@@ -77,6 +89,9 @@ REUSE_EXP=exp00 bash scripts/zhang2015-insightface/resnet50/cross-dataset/xgaze_
 
 # 全矩阵：每个源数据集分别指定实验，未指定的源自动跳过其组合
 XGAZE_EXP=exp00 MPIIFACEGAZE_EXP=exp03 bash scripts/zhang2015-insightface/resnet50/cross-dataset/all.sh
+
+# v3：按标签分两套脚本（内置 --label hcs/ccs，LOO 复用按「数据集×方法×label」匹配）
+bash scripts/ours-without-roll-hcs/resnet50/within-dataset/xgaze.sh
 ```
 
 - within-dataset 每次新开实验；MPII 的 15 折 LOO + 全量在同一实验目录的子运行（fold_00~14、all），脚本可安全重跑（已完成折跳过、中断折自动续训）。断点续训不属脚本职责，直接 `python main.py --resume expNN [--run fold_XX]`
@@ -96,11 +111,15 @@ XGAZE_EXP=exp00 MPIIFACEGAZE_EXP=exp03 bash scripts/zhang2015-insightface/resnet
 各数据集归一化为统一 h5 格式（Zhang2015 虚拟相机归一化 + insightface 106 点 PnP 头姿），入口 `preprocess.py`，配置在 `configs/preprocess/<管线>/<数据集>.yaml`：
 
 ```bash
-python preprocess.py --dataset mpiifacegaze --method zhang2015-insightface            # 全量 15 人
+python preprocess.py --dataset mpiifacegaze --method zhang2015-insightface            # v1 全量 15 人
 python preprocess.py --dataset mpiifacegaze --method zhang2015-insightface \
     --set 'subjects=["p00"]' max_days=1                                               # 调试小样本
-python preprocess.py --dataset xgaze --method zhang2015-insightface --set 'subjects=[0, 3]'
+python preprocess.py --dataset xgaze --method zhang2015-specific-face-model           # v2
+python preprocess.py --dataset mpiifacegaze --method ours-without-roll                # v3（roll-only）
 ```
+
+- v2/v3 的字段、模型与门控差异见各自 `normalization_protocol.md`；v3 以 v2 产物为索引与几何真源（无 DLT/PnP、逐图独立）
+- v2/v3 重跑后需把新产物同步到 `/data`（rsync），并确认 face_patch 为逐样本 chunk（存量修复：`preprocess/ours-without-roll/repack_chunks.py`）
 
 - 每次运行在 `preprocess/<method>/log/<dataset>_<时间戳>/` 留档 `run.log` 与 `failures.json`（**失败/跳过帧逐条记录**，含按原因汇总）
 - **landmarks 模式默认开启**（各配置 `landmarks_dir` 已指向各原始数据集目录的 `landmarks/` 索引）：从特征点 h5 遍历帧集、跳过 insightface 检测，与原始模式输出一致
