@@ -39,7 +39,7 @@ from utils.logger import get_logger                      # noqa: E402
 
 log = get_logger('preprocess.specific_face_model.xgaze.gen6_vs_dlt')
 
-LM_DIR = '/media/yanglinxuan/ylx/xgaze_insightface_224'
+LM_DIR = '/media/yanglinxuan/sfm/xgaze_insightface_224'
 CALIB_DIR = '/media/yanglinxuan/Expansion/xgaze_raw/calibration/cam_calibration'
 METRICS_DIR = HERE                                    # md/png → 本目录
 CAM_USE = list(range(18))

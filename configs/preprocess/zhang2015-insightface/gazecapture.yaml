@@ -12,7 +12,7 @@
 # 本平台不使用验证集：官方 val 已并入 train（见 split_file 注释）。
 name: gazecapture
 raw_data_dir: /media/yanglinxuan/zyx/GazeCapture
-output_dir: /media/yanglinxuan/ylx/gazecapture_insightface_224
+output_dir: /media/yanglinxuan/sfm/gazecapture_insightface_224
 split_file: configs/splits/gazecapture_sessions.yaml   # session 级 train/test 划分（val 已并入 train）
 calibration_dir: /media/yanglinxuan/zyx/GazeCapture/calibration  # 内参 xml（generate_calibration.py 生成，15 设备×双分辨率）
 sessions: []          # 空列表 = split_file 中全部 session；指定则如 ['00002', '00103']

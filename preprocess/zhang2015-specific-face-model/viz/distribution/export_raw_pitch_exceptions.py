@@ -33,7 +33,7 @@ from utils.normalization import vector_to_angles, HEAD_PITCH_OFFSET
 CAL = Path('/media/yanglinxuan/Expansion/xgaze_raw/calibration/cam_calibration')
 RAW = Path('/media/yanglinxuan/Expansion/xgaze_raw/data/train')
 ANN = Path('/media/yanglinxuan/Expansion/xgaze_raw/data/annotation_train')
-LM1 = Path('/media/yanglinxuan/ylx/xgaze_insightface_224')       # v1 特征点（分布图同源）
+LM1 = Path('/media/yanglinxuan/sfm/xgaze_insightface_224')       # v1 特征点（分布图同源）
 V2 = Path('/media/yanglinxuan/sfm/xgaze_specific_224')           # v2 归一化产物
 FM = Path('/media/yanglinxuan/sfm/xgaze_specific_face_model/face_models')
 OUT = _HERE / 'exception' / 'pitch60_tail'

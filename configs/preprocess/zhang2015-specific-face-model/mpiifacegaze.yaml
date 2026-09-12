@@ -3,7 +3,7 @@
 name: mpiifacegaze
 raw_data_dir: /media/yanglinxuan/zyx/MPIIFaceGaze               # 原始数据（读图 + Camera.mat）
 output_dir: /media/yanglinxuan/sfm/mpiifacegaze_specific_224    # 输出（每人一个 pXX.h5，lzf）
-face_model_root: /media/yanglinxuan/ylx/mpiifacegaze_specific_face_model/face_models
+# face_model_root: /media/yanglinxuan/ylx/...（BA 时代遗留，v2 用 gen_xe6 不读取；ylx 已卸载）
 landmarks_dir: /media/yanglinxuan/zyx/MPIIFaceGaze/landmarks    # 必填：landmarks 索引
 subjects: []          # 空列表 = 全部 15 人；指定则如 ["p00"]
 max_days: 0           # 调试用：只处理每人前 N 天（0 = 全部）

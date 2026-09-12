@@ -1,4 +1,4 @@
-# MPIIFaceGaze 数据集配置（已预处理为统一 h5：/media/yanglinxuan/ylx/mpiifacegaze_insightface_224）
+# MPIIFaceGaze 数据集配置（已预处理为统一 h5：/media/yanglinxuan/sfm/mpiifacegaze_insightface_224）
 # 两种协议由 split.mode 切换：
 #   leave_one_out  折 i 以 p{i:02d} 为测试被试，其余 14 人训练（within-dataset 协议，
 #                  --set dataset.split.fold=i 切换折，scripts 内自动循环 15 折）
@@ -6,7 +6,7 @@
 #                  也是 cross-dataset 的源训练 / 目标测试协议
 #                  （--set dataset.split.mode=all_subjects）
 name: mpiifacegaze
-data_dir: /data/others_preprocessed_datasets/mpiifacegaze_insightface_224
+data_dir: /media/yanglinxuan/sfm/mpiifacegaze_insightface_224
 
 split:
   mode: leave_one_out

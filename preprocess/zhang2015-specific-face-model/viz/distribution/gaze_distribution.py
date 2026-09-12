@@ -83,7 +83,7 @@ def angles(model, rvec, tvec, gp, K, head_world=None):
 
 # ------------------------------------------------------------ XGaze
 def sample_xgaze(rng, k_frame=300):
-    LM = Path('/media/yanglinxuan/ylx/xgaze_insightface_224')
+    LM = Path('/media/yanglinxuan/sfm/xgaze_insightface_224')
     CAL = Path('/media/yanglinxuan/Expansion/xgaze_raw/calibration/cam_calibration')
     ANN = Path('/media/yanglinxuan/Expansion/xgaze_raw/data/annotation_train')
     FM = Path('/media/yanglinxuan/sfm/xgaze_specific_face_model/face_models')

@@ -1,11 +1,13 @@
-"""EVE 3D 位置与头姿(HCS gaze) 跨相机一致性（2026-08-30，仿 xgaze 版）
+"""EVE 3D 位置与头姿(HCS gaze) 跨相机一致性（2026-08-30，仿 xgaze版；2026-09-11 增 2+2 DLT 交叉验证）
 
 组门控（2026-08-30 定稿）：四相机齐全 + 各自 PoG validity 全真 + PoG 跨相机
 离散 ≤5px（防标注时间错位，r=0.987 实证；2026-08-30 由 20px 收紧），缺一即弃；日志展示排除量。
-4 台相机无法做两组互验 DLT（2+2 基线太弱），故与 xgaze 版差异：
+4 台无 xgaze 式双组互验（5+5），故与 xgaze 版差异：
 - gen6 臂：逐相机独立 PnP（v1 形态）→ 3D 位置（官方外参转世界系）+ HCS；
-- true6 臂：**4 台一组** DLT → Kabsch(true6) 共享头姿（v2 部署形态）→ 仅 HCS
-  （3D 无组间可比对象，不产出）。
+- true6 臂：**4 台一组** DLT → Kabsch(true6) 共享头姿（v2 部署形态）→ HCS；
+- **2+2 DLT 交叉验证（2026-09-11）**：四相机按三种划分分两组（01|23、02|13、
+  03|12），各自三角化（同世界系）→ pos3d_true6_mm = 两臂 6 点平均距离——
+  量化 2+2 基线的三角化误差，也即 v2 4 台一组方案的组间一致性参照。
 固定参考相机 cam00 = basler（所有"跨相机"指标 = vs cam00）。
 EVE 视线链路：官方 PoG 直算（dataset_report §4 定稿公式）——
 face_PoG_tobii 屏幕像素 → ×millimeters_per_pixel → camera_transformation
@@ -14,12 +16,14 @@ face_PoG_tobii 屏幕像素 → ×millimeters_per_pixel → camera_transformatio
 
 中间值缓存 pos_hcs_cache.npz（逐对原始值 + 相机/被试标签 + 定位三元组
 （被试名, step 序号, 同步帧号），直接回溯原始数据）：
-命中则跳过采样直接出 CSV/图；POS_HCS_REFRESH=1 强制重采。
+命中且含 2+2 字段则跳过采样直接出 CSV/图（旧缓存缺字段自动重采）；
+POS_HCS_REFRESH=1 强制重采。
 
 输出（本目录，无 md）:
-  consistency_overall.csv       逐被试中位（末行 AVG）
+  consistency_overall.csv       逐被试中位（末行 AVG；含 pos3d_true6_mm）
   consistency_per_camera.csv    逐相机 vs cam00 中位（末行 AVG）
   hcs_true6_dist.png            hcs_true6_deg 概率分布（全体对汇总，标 p50/p90/p95/p98/p99）
+  pos3d_true6_dist.png          2+2 交叉验证 3D 距离分布（逐划分汇总，标分位）
 用法（仓库根目录）:
   /ssd/conda/envs/yanglinxuan/opengaze/bin/python \
   preprocess/zhang2015-specific-face-model/get_face_model/eve/metrics/frame_consistency/pos_hcs_consistency.py
@@ -52,6 +56,8 @@ N_FRAMES = 120
 DUMMY = np.zeros((32, 32, 3), np.uint8)
 REF_CAM = 0                       # basler，固定参考
 POG_SPREAD_MAX = 5.0             # 组门控：PoG 跨相机离散上限(px)
+# 2+2 DLT 交叉验证的三种划分（组内两台三角化，两组互比，均世界系）
+SPLITS_22 = (((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2)))
 CACHE = HERE / 'pos_hcs_cache.npz'
 
 
@@ -64,11 +70,13 @@ def sample():
     subjects = [(sp, p.stem) for sp in ('train', 'test')
                 for p in sorted(LM_ROOT.joinpath(sp).glob('*.h5'))]
     P_g, H_g, H_t = [], [], []
+    P_t22, sp22 = [], []           # 2+2 交叉验证：3D 距离 / 划分号
     cam_g, cam_t, subj_g, subj_t, n_frames = [], [], [], [], []
+    subj_p3 = []                   # 2+2 交叉验证的被试标签
     stats = [0, 0, 0, 0]   # [弃·总, 弃·相机/PoG无效, 弃·离散超限, 采样组数]
     # 定位三元组：每对记录 (被试名, step 序号, 同步帧号)，快速回溯原始数据
-    tri_g, tri_t = [], []          # gen6 臂 / true6 臂
-    spread_g, spread_t = [], []    # 组级 PoG 离散(px) 随对记录
+    tri_g, tri_t, tri_p3 = [], [], []       # gen6 臂 / true6 臂 / 2+2 臂
+    spread_g, spread_t, spread_p3 = [], [], []   # 组级 PoG 离散(px) 随对记录
     for sp, subj in tqdm(subjects, desc='subjects', unit='subj'):
         mpath = FM_DIR / subj / 'true6.txt'
         if not mpath.is_file():
@@ -176,15 +184,18 @@ def sample():
 
             # ---- true6 臂：4 台一组 DLT → Kabsch(true6) 共享头姿 → HCS ----
             rays, pv = [], []
+            ray_pv = {}                     # cam → (归一化射线, 世界系外参)
             for c, r, _, _ in rows_raw:
                 if c not in Ks:
                     continue
                 lm_n = cv2.undistortPoints(
                     lm_all[r][core.IDX6].astype(np.float64).reshape(-1, 1, 2),
                     Ks[c], None).reshape(-1, 2)
+                pvc = np.concatenate([cv2.Rodrigues(Rs[c])[0].ravel(),
+                                      ts[c].ravel()])
                 rays.append(lm_n)
-                pv.append(np.concatenate([cv2.Rodrigues(Rs[c])[0].ravel(),
-                                          ts[c].ravel()]))
+                pv.append(pvc)
+                ray_pv[c] = (lm_n, pvc)
             if len(rays) < 3:
                 continue
             n_used += 1
@@ -214,6 +225,24 @@ def sample():
                     spread_t.append(grp_spread)
                     tri_t.append((subj, rows_raw[0][3], int(
                         next(k[0] for k, v in sync_map.items() if v is rows_raw))))
+
+            # ---- 2+2 DLT 交叉验证：三划分 × 两臂各自三角化（世界系互比）----
+            if set(ray_pv) == set(range(4)):
+                tri_val = (subj, rows_raw[0][3], int(
+                    next(k[0] for k, v in sync_map.items() if v is rows_raw)))
+                for k22, (grpA, grpB) in enumerate(SPLITS_22):
+                    XA = core.triangulate(
+                        np.stack([ray_pv[c][0] for c in grpA]),
+                        np.stack([ray_pv[c][1] for c in grpA]), n_points=6)
+                    XB = core.triangulate(
+                        np.stack([ray_pv[c][0] for c in grpB]),
+                        np.stack([ray_pv[c][1] for c in grpB]), n_points=6)
+                    P_t22.append(float(
+                        np.linalg.norm(XA - XB, axis=1).mean()))
+                    sp22.append(k22)
+                    subj_p3.append(si)
+                    spread_p3.append(grp_spread)
+                    tri_p3.append(tri_val)
         n_frames.append((subj, n_used))
         stats[3] += len(idx)
 
@@ -222,12 +251,16 @@ def sample():
              hcs_true6=np.array(H_t), cam_g=np.array(cam_g),
              cam_t=np.array(cam_t), subj_g=np.array(subj_g),
              subj_t=np.array(subj_t),
+             pos3d_true6=np.array(P_t22), split22=np.array(sp22),
+             subj_p3=np.array(subj_p3), spread_p3=np.array(spread_p3),
              subj_names=np.array([n for n, _ in n_frames]),
              n_frames=np.array([n for _, n in n_frames]),
              tri_g=np.array(tri_g, dtype=object),
              tri_t=np.array(tri_t, dtype=object),
+             tri_p3=np.array(tri_p3, dtype=object),
              spread_g=np.array(spread_g), spread_t=np.array(spread_t))
-    log.info(f'缓存写入 {CACHE.name}（{len(H_t):,} 对）| 组门控: 采样 {stats[3]:,} | '
+    log.info(f'缓存写入 {CACHE.name}（{len(H_t):,} 对，2+2 {len(P_t22):,}）| '
+             f'组门控: 采样 {stats[3]:,} | '
              f'弃·相机/PoG无效 {stats[1]:,} ({stats[1]/max(stats[3],1):.1%}) | '
              f'弃·PoG离散>{POG_SPREAD_MAX:g}px {stats[2]:,} '
              f'({stats[2]/max(stats[3],1):.1%}) | 保留 {stats[3]-stats[0]:,}')
@@ -236,49 +269,73 @@ def sample():
 def main():
     if CACHE.is_file() and not os.environ.get('POS_HCS_REFRESH'):
         z = np.load(CACHE, allow_pickle=False)
-        log.info(f'缓存命中 {CACHE.name}（{len(z["hcs_true6"]):,} 对）')
+        if 'pos3d_true6' in z.files:
+            log.info(f'缓存命中 {CACHE.name}（{len(z["hcs_true6"]):,} 对）')
+        else:
+            log.info('旧缓存缺 2+2 字段，重采样')
+            sample()
+            z = np.load(CACHE)
     else:
         sample()
         z = np.load(CACHE)
     P_g, H_g, H_t = z['pos3d_gen6'], z['hcs_gen6'], z['hcs_true6']
     cam_g, cam_t = z['cam_g'], z['cam_t']
     subj_g, subj_t = z['subj_g'], z['subj_t']
+    P_t22, sp22, subj_p3 = z['pos3d_true6'], z['split22'], z['subj_p3']
     names, nf = list(z['subj_names']), z['n_frames']
 
-    # ---- 逐被试 CSV ----
+    # ---- 逐被试 CSV（pos 两列相邻）----
     overall = HERE / 'consistency_overall.csv'
     rows = []
     for si, (name, n) in enumerate(zip(names, nf)):
-        mg, mt = subj_g == si, subj_t == si
+        mg, mt, mp = subj_g == si, subj_t == si, subj_p3 == si
         if not mg.any() or not mt.any():
             continue
         rows.append((name, int(n), np.median(P_g[mg]),
+                     np.median(P_t22[mp]) if mp.any() else np.nan,
                      np.median(H_g[mg]), np.median(H_t[mt])))
     with open(overall, 'w') as f:
-        f.write('subject,n_frames,pos3d_gen6_mm,hcs_gen6_deg,hcs_true6_deg\n')
+        f.write('subject,n_frames,pos3d_gen6_mm,pos3d_true6_mm,'
+                'hcs_gen6_deg,hcs_true6_deg\n')
         for row in rows:
             f.write(','.join(f'{v:.3f}' if isinstance(v, float) else str(v)
                              for v in row) + '\n')
         arr = np.array([r[2:] for r in rows])
         f.write(f'AVG,{np.mean([r[1] for r in rows]):.1f},'
-                + ','.join(f'{v:.3f}' for v in arr.mean(0)) + '\n')
+                + ','.join(f'{v:.3f}' for v in np.nanmean(arr, axis=0)) + '\n')
 
-    # ---- 逐相机 CSV ----
+    # ---- 逐相机 CSV（pos 两列相邻；2+2 用最优划分展开到相机行）----
+    # 组级 2+2 距离的 per-camera 语义：camXX 行 = camXX 所在组 vs cam00 所在组。
+    # 每相机的候选划分 = 其与 cam00 异组的两种；取全局中位较优者（先看全体
+    # 最优划分，不在候选中则退回该相机候选中的较优者），行尾注明所用划分。
+    split_med = {k: float(np.median(P_t22[sp22 == k])) for k in range(3)}
+    best_k = min(split_med, key=split_med.get)
+    CAND = {1: (1, 2), 2: (0, 2), 3: (0, 1)}   # camXX 与 cam00 异组的划分号
+    def sname(k):
+        (a, b), (c_, d) = SPLITS_22[k]
+        return f'{a}{b}|{c_}{d}'
     per_cam = HERE / 'consistency_per_camera.csv'
     with open(per_cam, 'w') as f:
-        f.write('cam,n_pairs,pos3d_gen6_mm,hcs_gen6_deg,hcs_true6_deg\n')
+        f.write('cam,n_pairs,pos3d_gen6_mm,pos3d_true6_mm,hcs_gen6_deg,'
+                'hcs_true6_deg,pos3d_true6_split\n')
         rows_c = []
         for c in sorted(set(cam_t.tolist())):
             if c == REF_CAM:
                 continue
             mg, mt = cam_g == c, cam_t == c
+            k_c = best_k if best_k in CAND[c] else min(CAND[c],
+                                                       key=split_med.get)
             rows_c.append((c, int(mt.sum()), np.median(P_g[mg]),
-                           np.median(H_g[mg]), np.median(H_t[mt])))
-        for c, n, a, b, t in rows_c:
-            f.write(f'cam{c:02d},{n},{a:.3f},{b:.3f},{t:.3f}\n')
-        arr_c = np.array([r[2:] for r in rows_c])
+                           np.median(P_t22[sp22 == k_c]),
+                           np.median(H_g[mg]), np.median(H_t[mt]), sname(k_c)))
+        for c, n, a, p3, b, t, sn in rows_c:
+            f.write(f'cam{c:02d},{n},{a:.3f},{p3:.3f},{b:.3f},{t:.3f},{sn}\n')
+        arr_c = np.array([r[2:6] for r in rows_c])
         f.write('AVG vs cam00,' + str(rows_c[0][1]) + ','
-                + ','.join(f'{v:.3f}' for v in arr_c.mean(0)) + '\n')
+                + ','.join(f'{v:.3f}' for v in arr_c.mean(0)) + ',\n')
+    log.info('2+2 划分中位(mm): ' + ', '.join(
+        f'{sname(k)}={v:.2f}' for k, v in sorted(split_med.items()))
+        + f'，最优 {sname(best_k)}')
 
     # ---- hcs_true6 概率分布图（全体对汇总）----
     import matplotlib
@@ -332,12 +389,44 @@ def main():
     fig.tight_layout()
     png = HERE / 'hcs_true6_dist.png'
     fig.savefig(png, dpi=250)
+
+    # ---- 2+2 交叉验证 3D 距离分布（逐划分）----
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    colors = ('#3b7dd8', '#d8633b', '#3bd87f')
+    for k22, (grpA, grpB), c in zip(range(3), SPLITS_22, colors):
+        v = P_t22[sp22 == k22]
+        hi_ = min(10.0, float(np.percentile(P_t22, 99.5)))   # 显示范围截 p99.5
+        bins = np.linspace(0, hi_, 120)
+        cnt, edges = np.histogram(v, bins=bins)
+        centers = (edges[:-1] + edges[1:]) / 2
+        ax.plot(centers, cnt / max(cnt.max(), 1), lw=1.6, color=c,
+                label=f'{"".join(map(str, grpA))}|{"".join(map(str, grpB))}  '
+                      f'p50={np.median(v):.2f} p90={np.percentile(v, 90):.2f} '
+                      f'p95={np.percentile(v, 95):.2f} mm')
+    ax.set_xlim(0, hi_)
+    ax.set_xlabel('pos3d_true6_mm (2+2 DLT cross-validation, world frame)')
+    ax.set_ylabel('normalized count')
+    st_all = {q: float(np.percentile(P_t22, q)) for q in (50, 90, 95, 98)}
+    for (q, v), c in zip(sorted(st_all.items()),
+                         ('tab:green', 'tab:orange', 'tab:red', 'tab:purple')):
+        ax.axvline(v, color=c, ls='--', lw=1.4)
+        ax.text(v * 1.02, ax.get_ylim()[1] * (0.95 if q < 95 else 0.75),
+                f'p{q}={v:.2f}', color=c, fontsize=9)
+    ax.set_title(f'EVE 2+2 DLT cross-validation 3D distance distribution  '
+                 f'(n={len(P_t22):,} splits, {len(rows)} subjects)')
+    ax.legend(fontsize=9)
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    png22 = HERE / 'pos3d_true6_dist.png'
+    fig.savefig(png22, dpi=250)
     log.info(f'参考相机 cam00(basler) | 输出 {overall.name} / {per_cam.name} / '
-             f'{png.name}（{len(rows)} 被试）| gen6: 3D '
+             f'{png.name} / {png22.name}（{len(rows)} 被试）| gen6: 3D '
              f'{np.median([r[2] for r in rows]):.2f} mm, '
              f'HCS {np.median([r[3] for r in rows]):.2f}° | '
              f'true6(4台一组): HCS {np.median([r[4] for r in rows]):.2f}° '
-             f'(p90 {stats[90]:.2f}°, p95 {stats[95]:.2f}°)')
+             f'(p90 {stats[90]:.2f}°, p95 {stats[95]:.2f}°) | '
+             f'2+2 交叉验证: {np.median(P_t22):.2f} mm '
+             f'(p90 {st_all[90]:.2f}, p95 {st_all[95]:.2f}, p98 {st_all[98]:.2f})')
 
 
 if __name__ == '__main__':

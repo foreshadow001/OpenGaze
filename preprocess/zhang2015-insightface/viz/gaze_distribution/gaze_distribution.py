@@ -66,7 +66,7 @@ def _angles(model, rvec, tvec, gp, K):
 
 # ------------------------------------------------------------ XGaze
 def sample_xgaze(rng, k_frame=300):
-    LM = Path('/media/yanglinxuan/ylx/xgaze_insightface_224')
+    LM = Path('/media/yanglinxuan/sfm/xgaze_insightface_224')
     CAL = Path('/media/yanglinxuan/Expansion/xgaze_raw/calibration/cam_calibration')
     ANN = Path('/media/yanglinxuan/Expansion/xgaze_raw/data/annotation_train')
     GEN6 = np.loadtxt(

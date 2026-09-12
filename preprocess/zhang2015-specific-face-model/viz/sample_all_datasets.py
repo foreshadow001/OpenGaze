@@ -68,7 +68,7 @@ def _gaze_vec(pitch, yaw):
 
 # --------------------------------------------------------------- XGaze
 def load_xgaze(rng):
-    LM = Path('/media/yanglinxuan/ylx/xgaze_insightface_224')
+    LM = Path('/media/yanglinxuan/sfm/xgaze_insightface_224')
     RAW = Path('/media/yanglinxuan/Expansion/xgaze_raw/data/train')
     ANN = Path('/media/yanglinxuan/Expansion/xgaze_raw/data/annotation_train')
     CAL = Path('/media/yanglinxuan/Expansion/xgaze_raw/calibration/cam_calibration')

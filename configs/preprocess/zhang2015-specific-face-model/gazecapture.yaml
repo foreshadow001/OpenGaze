@@ -6,7 +6,7 @@
 name: gazecapture
 raw_data_dir: /media/yanglinxuan/zyx/GazeCapture
 output_dir: /media/yanglinxuan/sfm/gazecapture_specific_224     # 输出（按 split 分目录，lzf）
-face_model_root: /media/yanglinxuan/ylx/gazecapture_specific_face_model/face_models
+# face_model_root: /media/yanglinxuan/ylx/...（BA 时代遗留，v2 用 gen_xe6 不读取；ylx 已卸载）
 split_file: configs/splits/gazecapture_sessions.yaml  # 官方全量（训练侧走 FAZE）
 calibration_dir: /media/yanglinxuan/zyx/GazeCapture/calibration # 内参 xml（15 设备×双分辨率）
 landmarks_dir: /media/yanglinxuan/zyx/GazeCapture/landmarks     # 必填：landmarks 索引（按 split 分目录）

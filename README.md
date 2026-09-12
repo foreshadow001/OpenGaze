@@ -19,7 +19,7 @@
 | `zhang2015-specific-face-model`（v2） | 同 v1 归一化；xgaze/EVE 逐人 true6_canonical + DLT 头姿，GC/MPII gen_xe6 + PnP | `<ds>_specific_224` | [normalization_protocol.md](preprocess/zhang2015-specific-face-model/normalization_protocol.md) |
 | `ours-without-roll`（v3） | **fixed_forward=True roll-only**（头姿 pitch/yaw 保留在 patch、roll=0）；几何从 v2 产物精确恢复，无 DLT/PnP | `<ds>_noroll_224` | [normalization_protocol.md](preprocess/ours-without-roll/normalization_protocol.md) |
 
-所有数据集预处理为统一 h5：`face_patch (N,224,224,3) uint8` + `face_gaze (N,2) (pitch,yaw) 弧度`（v2/v3 另有 `face_gaze_hcs` 头架系标签），BGR 存储、加载时统一翻转，face_patch 逐样本 chunk。**训练读取统一走 `/data/others_preprocessed_datasets/`（NVMe，十二套 v1/v2/v3 副本）；ylx/sfm 盘为预处理写出与正本**。
+所有数据集预处理为统一 h5：`face_patch (N,224,224,3) uint8` + `face_gaze (N,2) (pitch,yaw) 弧度`（v2/v3 另有 `face_gaze_hcs` 头架系标签），BGR 存储、加载时统一翻转，face_patch 逐样本 chunk。**全部十二套产物正本在 `/media/yanglinxuan/sfm/`（2TB SATA 固态，唯一一份，训练/评测统一读它）**。
 
 ## 项目结构
 

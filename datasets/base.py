@@ -28,7 +28,7 @@ class GazeH5Dataset(Dataset):
     """统一 h5 读取（懒加载 + swmr， DataLoader 多 worker 安全）
 
     Args:
-        dataset_path: 数据根目录（如 /media/yanglinxuan/ylx/xgaze_insightface_224）
+        dataset_path: 数据根目录（如 /media/yanglinxuan/sfm/xgaze_insightface_224）
         sub_folder:   h5 文件所在子目录（如 train）
         files:        h5 文件名列表
         bgr_to_rgb:   官方 ETH-XGaze h5 为 BGR 存储，需翻转；自行预处理的 RGB 数据传 False

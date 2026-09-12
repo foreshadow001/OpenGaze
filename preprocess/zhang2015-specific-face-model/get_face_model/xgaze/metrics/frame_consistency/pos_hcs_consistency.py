@@ -42,7 +42,7 @@ from utils.normalization import estimateHeadPose, normalizeData_face  # noqa: E4
 
 log = get_logger('preprocess.specific_face_model.xgaze.pos_hcs_consistency')
 
-LM_DIR = '/media/yanglinxuan/ylx/xgaze_insightface_224'
+LM_DIR = '/media/yanglinxuan/sfm/xgaze_insightface_224'
 ANN_DIR = '/media/yanglinxuan/Expansion/xgaze_raw/data/annotation_train'
 CALIB_DIR = '/media/yanglinxuan/Expansion/xgaze_raw/calibration/cam_calibration'
 FM_DIR = Path('/media/yanglinxuan/sfm/xgaze_specific_face_model/face_models')

@@ -46,7 +46,7 @@ from utils.normalization import canonicalize_face_model as canonicalize  # noqa:
 
 log = get_logger('preprocess.specific_face_model.xgaze.true_face_model')
 
-LM_DIR = '/media/yanglinxuan/ylx/xgaze_insightface_224'
+LM_DIR = '/media/yanglinxuan/sfm/xgaze_insightface_224'
 CALIB_DIR = '/media/yanglinxuan/Expansion/xgaze_raw/calibration/cam_calibration'
 OUT_DIR = Path('/media/yanglinxuan/sfm/xgaze_specific_face_model/face_models')
 METRICS_DIR = HERE / 'metrics' / 'true_model'
